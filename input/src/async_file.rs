@@ -4,7 +4,7 @@ use mio::{Poll, PollOpt, Ready, Token};
 use std::convert::AsRef;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Write};
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{self, Context};
@@ -28,6 +28,12 @@ impl AsyncFile {
         Ok(Self {
             file: PollEvented::new(inner)?,
         })
+    }
+}
+
+impl AsRawFd for AsyncFile {
+    fn as_raw_fd(&self) -> RawFd {
+        self.file.get_ref().0.as_raw_fd()
     }
 }
 
