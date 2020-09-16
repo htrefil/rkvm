@@ -1,4 +1,4 @@
 mod async_file;
 mod bindings;
-mod event;
-mod event_manager;
+mod event_reader;
+mod event_writer;
