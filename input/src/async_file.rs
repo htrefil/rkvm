@@ -1,11 +1,16 @@
+use libc::c_int;
 use mio::event::Evented;
 use mio::unix::EventedFd;
 use mio::{Poll, PollOpt, Ready, Token};
 use std::convert::AsRef;
+use std::convert::TryInto;
+use std::ffi::CString;
 use std::fs::{File, OpenOptions};
+use std::io::ErrorKind;
 use std::io::{Error, Read, Write};
+use std::os::unix::ffi::OsStringExt;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::task::{self, Context};
 use tokio::io::{AsyncRead, AsyncWrite, PollEvented};
@@ -16,24 +21,28 @@ pub struct AsyncFile {
 
 impl AsyncFile {
     pub async fn open(path: impl AsRef<Path>, mode: OpenMode) -> Result<Self, Error> {
-        let mut options = OpenOptions::new();
-        match mode {
-            OpenMode::Read => options.read(true),
-            OpenMode::Write => options.write(true),
-            OpenMode::ReadWrite => options.read(true).write(true),
-        };
         let path = path.as_ref().to_owned();
-        let inner = Inner(tokio::task::spawn_blocking(move || options.open(path)).await??);
 
-        Ok(Self {
-            file: PollEvented::new(inner)?,
-        })
+        tokio::task::spawn_blocking(move || Self::open_sync(path, mode)).await?
     }
-}
 
-impl AsRawFd for AsyncFile {
-    fn as_raw_fd(&self) -> RawFd {
-        self.file.get_ref().0.as_raw_fd()
+    fn open_sync(path: PathBuf, mode: OpenMode) -> Result<Self, Error> {
+        let path =
+            CString::new(path.into_os_string().into_vec()).map_err(|_| ErrorKind::InvalidInput)?;
+        let flags = match mode {
+            OpenMode::Read => libc::O_RDONLY,
+            OpenMode::Write => libc::O_WRONLY,
+            OpenMode::ReadWrite => libc::O_RDWR,
+        };
+
+        let fd = unsafe { libc::open(path.as_ptr(), flags | libc::O_NONBLOCK) };
+        if fd == -1 {
+            return Err(Error::last_os_error());
+        }
+
+        Ok(AsyncFile {
+            file: PollEvented::new(Inner { fd })?,
+        })
     }
 }
 
@@ -71,7 +80,51 @@ impl AsyncWrite for AsyncFile {
     }
 }
 
-struct Inner(File);
+#[derive(Clone, Copy, Debug)]
+pub enum OpenMode {
+    Read,
+    Write,
+    ReadWrite,
+}
+
+struct Inner {
+    fd: c_int,
+}
+
+impl Read for Inner {
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
+        let size = buffer
+            .len()
+            .try_into()
+            .map_err(|_| ErrorKind::InvalidInput)?;
+        let read = unsafe { libc::read(self.fd, buffer.as_mut_ptr() as *mut _, size) };
+        if read == -1 {
+            return Err(Error::last_os_error());
+        }
+
+        Ok(read.try_into().unwrap())
+    }
+}
+
+impl Write for Inner {
+    fn write(&mut self, data: &[u8]) -> Result<usize, Error> {
+        let size = data.len().try_into().map_err(|_| ErrorKind::InvalidInput)?;
+        let written = unsafe { libc::write(self.fd, data.as_ptr() as *mut _, size) };
+        if written == -1 {
+            return Err(Error::last_os_error());
+        }
+
+        Ok(written.try_into().unwrap())
+    }
+
+    fn flush(&mut self) -> Result<(), Error> {
+        if unsafe { libc::fsync(self.fd) == -1 } {
+            return Err(Error::last_os_error());
+        }
+
+        Ok(())
+    }
+}
 
 impl Evented for Inner {
     fn register(
@@ -81,7 +134,7 @@ impl Evented for Inner {
         interest: Ready,
         opts: PollOpt,
     ) -> Result<(), Error> {
-        EventedFd(&self.0.as_raw_fd()).register(poll, token, interest, opts)
+        EventedFd(&self.fd).register(poll, token, interest, opts)
     }
 
     fn reregister(
@@ -91,33 +144,18 @@ impl Evented for Inner {
         interest: Ready,
         opts: PollOpt,
     ) -> Result<(), Error> {
-        EventedFd(&self.0.as_raw_fd()).reregister(poll, token, interest, opts)
+        EventedFd(&self.fd).reregister(poll, token, interest, opts)
     }
 
     fn deregister(&self, poll: &Poll) -> Result<(), Error> {
-        EventedFd(&self.0.as_raw_fd()).deregister(poll)
+        EventedFd(&self.fd).deregister(poll)
     }
 }
 
-impl Read for Inner {
-    fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
-        self.0.read(buffer)
+impl Drop for Inner {
+    fn drop(&mut self) {
+        unsafe {
+            libc::close(self.fd);
+        }
     }
-}
-
-impl Write for Inner {
-    fn write(&mut self, data: &[u8]) -> Result<usize, Error> {
-        self.0.write(data)
-    }
-
-    fn flush(&mut self) -> Result<(), Error> {
-        self.0.flush()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum OpenMode {
-    Read,
-    Write,
-    ReadWrite,
 }
