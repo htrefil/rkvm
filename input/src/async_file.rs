@@ -46,6 +46,12 @@ impl AsyncFile {
     }
 }
 
+impl AsRawFd for AsyncFile {
+    fn as_raw_fd(&self) -> RawFd {
+        self.file.get_ref().fd
+    }
+}
+
 impl AsyncRead for AsyncFile {
     fn poll_read(
         mut self: Pin<&mut Self>,
