@@ -31,7 +31,7 @@ async fn run(server: &str, port: u16) -> Result<Infallible, Error> {
 
     let mut writer = EventWriter::new().await?;
     loop {
-        let message: Message = net::read_message(&mut stream).await?;
+        let message = net::read_message(&mut stream).await?;
         match message {
             Message::Event(event) => writer.write(event).await?,
             Message::KeepAlive => {}
