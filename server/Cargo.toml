@@ -7,3 +7,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { version = "0.2.22", features = ["macros", "time", "fs", "tcp"] }
+input = { path = "../input" }
+net = { path = "../net" }
+serde = { version = "1.0.117", features = ["derive"] }
+toml = "0.5.7"
+structopt = "0.3.20"
+log = "0.4.11"
+env_logger = "0.8.1"
+tokio-native-tls = "0.1.0"
+native-tls = "0.2.4"
