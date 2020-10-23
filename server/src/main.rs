@@ -113,11 +113,12 @@ async fn run(listen_address: SocketAddr, switch_keys: &HashSet<u16>) -> Result<I
                 }
 
                 if current != 0 {
-                    if clients[current - 1].send(event).is_ok() {
+                    let idx = current - 1;
+                    if clients[idx].send(event).is_ok() {
                         continue;
                     }
 
-                    clients.remove(current);
+                    clients.remove(idx);
                     current = 0;
                 }
 
