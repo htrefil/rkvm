@@ -1,8 +1,10 @@
 use crate::async_file::{AsyncFile, OpenMode};
-use crate::bindings;
-use libc::c_int;
+use crate::event::Event;
+use crate::setup::{self, input_event};
 use std::io::Error;
+use std::mem;
 use std::os::unix::io::AsRawFd;
+use tokio::io::AsyncWriteExt;
 
 pub struct EventWriter {
     file: AsyncFile,
@@ -11,22 +13,19 @@ pub struct EventWriter {
 impl EventWriter {
     pub async fn new() -> Result<Self, Error> {
         let file = AsyncFile::open("/dev/uinput", OpenMode::Write).await?;
-        let fd = file.as_raw_fd();
-
-        for evbit in &[bindings::EV_KEY, bindings::EV_REL] {
-            // Doesn't work, UI_SET_KEYBIT not found.
-            // Probably too complicated for bindgen to be able to do something with it.
-            check_ioctl(unsafe { libc::ioctl(fd, bindings::UI_SET_KEYBIT, evbit) })?;
+        if unsafe { setup::setup_write_fd(file.as_raw_fd()) == 0 } {
+            return Err(Error::last_os_error());
         }
 
-        Ok(EventWriter { file })
-    }
-}
-
-fn check_ioctl(ret: c_int) -> Result<(), Error> {
-    if ret == -1 {
-        return Err(Error::last_os_error());
+        Ok(Self { file })
     }
 
-    Ok(())
+    pub async fn write(&mut self, event: Event) -> Result<(), Error> {
+        self.write_raw(event.to_raw()).await
+    }
+
+    pub(crate) async fn write_raw(&mut self, event: input_event) -> Result<(), Error> {
+        let data: [u8; mem::size_of::<input_event>()] = unsafe { mem::transmute(event) };
+        self.file.write_all(&data).await
+    }
 }

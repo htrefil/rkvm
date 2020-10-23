@@ -5,7 +5,6 @@ use mio::{Poll, PollOpt, Ready, Token};
 use std::convert::AsRef;
 use std::convert::TryInto;
 use std::ffi::CString;
-use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::io::{Error, Read, Write};
 use std::os::unix::ffi::OsStringExt;
@@ -32,7 +31,6 @@ impl AsyncFile {
         let flags = match mode {
             OpenMode::Read => libc::O_RDONLY,
             OpenMode::Write => libc::O_WRONLY,
-            OpenMode::ReadWrite => libc::O_RDWR,
         };
 
         let fd = unsafe { libc::open(path.as_ptr(), flags | libc::O_NONBLOCK) };
@@ -90,7 +88,6 @@ impl AsyncWrite for AsyncFile {
 pub enum OpenMode {
     Read,
     Write,
-    ReadWrite,
 }
 
 struct Inner {
