@@ -33,6 +33,11 @@ int setup_write_fd(int fd) {
     return 1;
 }
 
+int destroy_write_fd(int fd) {
+    IOCTL(fd, UI_DEV_DESTROY);
+    return 1;
+}
+
 int setup_read_fd(int fd) {
     IOCTL(fd, EVIOCGRAB, 1);
     return 1;

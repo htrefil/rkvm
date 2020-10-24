@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "0.2.22", features = ["fs", "io-util", "io-driver", "sync", "blocking"] }
-mio = { version = "0.6.22" }
+tokio = { version = "0.2.22", features = ["fs", "io-util", "io-driver", "sync", "blocking", "uds"] }
+mio = "0.6.22"
 libc = "0.2.77"
 serde = { version = "1.0.117", features = ["derive"] }
 
