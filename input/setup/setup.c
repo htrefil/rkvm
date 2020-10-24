@@ -21,6 +21,7 @@ int setup_write_fd(int fd) {
     IOCTL(fd, UI_SET_RELBIT, REL_WHEEL);
     
     struct uinput_setup setup;
+    memset(&setup, 0, sizeof(setup));
     setup.id.bustype = BUS_USB;
     setup.id.vendor = 1;
     setup.id.product = 1;
