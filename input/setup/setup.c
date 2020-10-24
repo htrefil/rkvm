@@ -25,7 +25,7 @@ int setup_write_fd(int fd) {
     setup.id.vendor = 1;
     setup.id.product = 1;
     setup.ff_effects_max = 0;
-    strcpy(setup.name, "kvm");
+    strcpy(setup.name, "rkvm");
 
     IOCTL(fd, UI_DEV_SETUP, &setup);
     IOCTL(fd, UI_DEV_CREATE);
