@@ -29,7 +29,7 @@ impl Event {
                 direction: Direction::Down,
                 code,
             } => (setup::EV_KEY as _, code, 1),
-            Event::Sync => (setup::EV_SYN as _, 0, 0),
+            Event::Sync => (setup::EV_SYN as _, setup::SYN_REPORT as _, 0),
         };
 
         input_event {
@@ -62,7 +62,7 @@ impl Event {
                 direction: Direction::Down,
                 code: code as _,
             },
-            (setup::EV_SYN, _, _) => Event::Sync,
+            (setup::EV_SYN, setup::SYN_REPORT, _) => Event::Sync,
             _ => return None,
         };
 
