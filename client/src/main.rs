@@ -70,8 +70,20 @@ async fn main() {
         }
     };
 
-    if let Err(err) = run(&config.server.hostname, config.server.port).await {
-        log::error!("Error: {}", err);
-        process::exit(1);
+    tokio::select! {
+        result = run(&config.server.hostname, config.server.port) => {
+            if let Err(err) = result {
+                log::error!("Error: {}", err);
+                process::exit(1);
+            }
+        }
+        result = tokio::signal::ctrl_c() => {
+            if let Err(err) = result {
+                log::error!("Error setting up signal handler: {}", err);
+                process::exit(1);
+            }
+
+            log::info!("Exiting on signal");
+        }
     }
 }

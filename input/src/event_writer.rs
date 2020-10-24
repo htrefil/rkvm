@@ -29,3 +29,11 @@ impl EventWriter {
         self.file.write_all(&data).await
     }
 }
+
+impl Drop for EventWriter {
+    fn drop(&mut self) {
+        unsafe {
+            setup::destroy_write_fd(self.file.as_raw_fd());
+        }
+    }
+}
