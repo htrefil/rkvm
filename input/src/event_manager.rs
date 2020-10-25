@@ -1,7 +1,7 @@
 use crate::event::Event;
 use crate::event_reader::{EventReader, OpenError};
 use crate::event_writer::EventWriter;
-use crate::setup::input_event;
+use crate::glue::input_event;
 use std::io::{Error, ErrorKind};
 use tokio::fs;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
