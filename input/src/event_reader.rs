@@ -28,7 +28,7 @@ impl EventReader {
     }
 
     pub async fn read(&mut self) -> Result<input_event, Error> {
-        let mut buffer = [0u8; mem::size_of::<input_event>()];
+        let mut buffer = [0; mem::size_of::<input_event>()];
         self.file
             .read_exact(&mut buffer)
             .await
