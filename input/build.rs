@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=glue/glue.h");
+    println!("cargo:rustc-link-lib=evdev");
 
     let bindings = Builder::default()
         .header("glue/glue.h")

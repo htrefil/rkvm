@@ -1,5 +1,5 @@
 use crate::event::Event;
-use crate::event_reader::{EventReader, OpenError};
+use crate::event_reader::EventReader;
 use crate::event_writer::EventWriter;
 use crate::glue::input_event;
 use std::io::{Error, ErrorKind};
@@ -21,11 +21,17 @@ impl EventManager {
                 continue;
             }
 
-            let reader = match EventReader::new(&path).await {
-                Ok(reader) => reader,
-                Err(OpenError::NotSupported) => continue,
-                Err(OpenError::Io(err)) => return Err(err),
-            };
+            // Skip non input event files.
+            if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| !name.starts_with("event"))
+                .unwrap_or(true)
+            {
+                continue;
+            }
+
+            let reader = EventReader::new(&path).await?;
             let sender = sender.clone();
 
             tokio::spawn(handle_events(reader, sender));
