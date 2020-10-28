@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::time::Duration;
 use structopt::StructOpt;
@@ -16,6 +16,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::time;
+use tokio_native_tls::native_tls::{Identity, TlsAcceptor};
 
 async fn handle_connection<T>(
     mut stream: T,
@@ -48,7 +49,18 @@ where
     }
 }
 
-async fn run(listen_address: SocketAddr, switch_keys: &HashSet<u16>) -> Result<Infallible, Error> {
+async fn run(
+    listen_address: SocketAddr,
+    switch_keys: &HashSet<u16>,
+    identity_path: &Path,
+    identity_password: &str,
+) -> Result<Infallible, Error> {
+    let identity = fs::read(identity_path).await?;
+    let identity = Identity::from_pkcs12(&identity, identity_password)
+        .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+    let acceptor: tokio_native_tls::TlsAcceptor = TlsAcceptor::new(identity)
+        .map_err(|err| Error::new(ErrorKind::InvalidData, err))
+        .map(Into::into)?;
     let listener = TcpListener::bind(listen_address).await?;
 
     log::info!("Listening on {}", listen_address);
@@ -61,6 +73,14 @@ async fn run(listen_address: SocketAddr, switch_keys: &HashSet<u16>) -> Result<I
                 Err(err) => {
                     let _ = client_sender.send(Err(err));
                     return;
+                }
+            };
+
+            let stream = match acceptor.accept(stream).await {
+                Ok(stream) => stream,
+                Err(err) => {
+                    log::error!("{}: TLS error: {}", address, err);
+                    continue;
                 }
             };
 
@@ -163,7 +183,7 @@ async fn main() {
     };
 
     tokio::select! {
-        result = run(config.listen_address, &config.switch_keys) => {
+        result = run(config.listen_address, &config.switch_keys, &config.identity_path, &config.identity_password) => {
             if let Err(err) = result {
                 log::error!("Error: {}", err);
                 process::exit(1);
