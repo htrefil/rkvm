@@ -1,7 +1,5 @@
 use crate::glue::{self, input_event, libevdev};
-use mio::event::Evented;
 use mio::unix::EventedFd;
-use mio::{PollOpt, Ready, Token};
 use std::fs::{File, OpenOptions};
 use std::future::Future;
 use std::io::Error;
@@ -14,7 +12,7 @@ use std::task::{Context, Poll};
 use tokio::io::Registration;
 
 pub(crate) struct EventReader {
-    file: EventedFile,
+    file: File,
     registration: Registration,
     evdev: *mut libevdev,
 }
@@ -22,33 +20,29 @@ pub(crate) struct EventReader {
 impl EventReader {
     pub async fn new(path: &Path) -> Result<Self, Error> {
         let path = path.to_owned();
-
-        tokio::task::spawn_blocking(move || Self::open_sync(&path)).await?
+        tokio::task::spawn_blocking(move || Self::new_sync(&path)).await?
     }
 
-    pub async fn read(&mut self) -> Result<input_event, Error> {
-        Read { reader: self }.await
-    }
-
-    fn open_sync(path: &Path) -> Result<Self, Error> {
+    fn new_sync(path: &Path) -> Result<Self, Error> {
         let file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NONBLOCK)
-            .open(path)
-            .map(|file| EventedFile { file })?;
-        let registration = Registration::new(&file)?;
+            .open(path)?;
+        let registration = Registration::new(&EventedFd(&file.as_raw_fd()))?;
 
-        let mut evdev = std::ptr::null_mut();
-
-        let ret =
-            unsafe { glue::libevdev_new_from_fd(file.file.as_raw_fd(), &mut evdev as *mut _) };
+        let mut evdev = MaybeUninit::uninit();
+        let ret = unsafe { glue::libevdev_new_from_fd(file.as_raw_fd(), evdev.as_mut_ptr()) };
         if ret < 0 {
             return Err(Error::from_raw_os_error(-ret));
         }
 
+        let evdev = unsafe { evdev.assume_init() };
         let ret = unsafe { glue::libevdev_grab(evdev, glue::libevdev_grab_mode_LIBEVDEV_GRAB) };
         if ret < 0 {
-            unsafe { glue::libevdev_free(evdev) };
+            unsafe {
+                glue::libevdev_free(evdev);
+            }
+
             return Err(Error::from_raw_os_error(-ret));
         }
 
@@ -58,56 +52,39 @@ impl EventReader {
             evdev,
         })
     }
+
+    pub async fn read(&mut self) -> Result<input_event, Error> {
+        Read {
+            reader: self,
+            polling: false,
+        }
+        .await
+    }
+}
+
+impl Drop for EventReader {
+    fn drop(&mut self) {
+        unsafe {
+            glue::libevdev_free(self.evdev);
+        }
+    }
 }
 
 unsafe impl Send for EventReader {}
 
-impl Drop for EventReader {
-    fn drop(&mut self) {
-        unsafe { glue::libevdev_free(self.evdev) };
-    }
-}
-
-struct EventedFile {
-    file: File,
-}
-
-impl Evented for EventedFile {
-    fn register(
-        &self,
-        poll: &mio::Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> Result<(), Error> {
-        EventedFd(&self.file.as_raw_fd()).register(poll, token, interest, opts)
-    }
-
-    fn reregister(
-        &self,
-        poll: &mio::Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> Result<(), Error> {
-        EventedFd(&self.file.as_raw_fd()).reregister(poll, token, interest, opts)
-    }
-
-    fn deregister(&self, poll: &mio::Poll) -> Result<(), Error> {
-        EventedFd(&self.file.as_raw_fd()).deregister(poll)
-    }
-}
-
 struct Read<'a> {
     reader: &'a mut EventReader,
+    polling: bool,
 }
 
 impl Future for Read<'_> {
     type Output = Result<input_event, Error>;
 
-    fn poll(self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
-        if let Poll::Pending = self.reader.registration.poll_read_ready(context)? {
-            return Poll::Pending;
+    fn poll(mut self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
+        if self.polling {
+            if let Poll::Pending = self.reader.registration.poll_read_ready(context)? {
+                return Poll::Pending;
+            }
         }
 
         let mut event = MaybeUninit::uninit();
@@ -118,10 +95,19 @@ impl Future for Read<'_> {
                 event.as_mut_ptr(),
             )
         };
+
+        if !self.polling && ret == -libc::EAGAIN {
+            self.polling = true;
+            return self.poll(context);
+        }
+
+        self.polling = false;
+
         if ret < 0 {
             return Poll::Ready(Err(Error::from_raw_os_error(-ret)));
         }
 
-        Poll::Ready(Ok(unsafe { event.assume_init() }))
+        let event = unsafe { event.assume_init() };
+        Poll::Ready(Ok(event))
     }
 }

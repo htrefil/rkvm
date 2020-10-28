@@ -6,8 +6,10 @@ fn main() {
     println!("cargo:rerun-if-changed=glue/glue.h");
     println!("cargo:rustc-link-lib=evdev");
 
+    // TODO: pkg-config
     let bindings = Builder::default()
         .header("glue/glue.h")
+        .clang_arg("-I/usr/include/libevdev-1.0/")
         .parse_callbacks(Box::new(CargoCallbacks))
         .generate()
         .unwrap();
