@@ -52,7 +52,8 @@ impl EventWriter {
 
     pub(crate) async fn write_raw(&mut self, event: input_event) -> Result<(), Error> {
         // As far as tokio is concerned, the FD never becomes ready for writing, so just write it normally.
-        // If an error happens, it will be propagated to caller, so it shouldn't be an issue.
+        // If an error happens, it will be propagated to caller and the FD is opened in nonblocking mode anyway,
+        // so it shouldn't be an issue.
         let ret = unsafe {
             glue::libevdev_uinput_write_event(
                 self.uinput as *const _,
