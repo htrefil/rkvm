@@ -49,7 +49,7 @@ where
 }
 
 async fn run(listen_address: SocketAddr, switch_keys: &HashSet<u16>) -> Result<Infallible, Error> {
-    let mut listener = TcpListener::bind(listen_address).await?;
+    let listener = TcpListener::bind(listen_address).await?;
 
     log::info!("Listening on {}", listen_address);
 
