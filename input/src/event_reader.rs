@@ -1,19 +1,14 @@
 use crate::glue::{self, input_event, libevdev};
-use mio::unix::EventedFd;
 use std::fs::{File, OpenOptions};
-use std::future::Future;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use tokio::io::Registration;
+use tokio::io::unix::AsyncFd;
 
 pub(crate) struct EventReader {
-    file: File,
-    registration: Registration,
+    file: AsyncFd<File>,
     evdev: *mut libevdev,
 }
 
@@ -27,8 +22,8 @@ impl EventReader {
         let file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NONBLOCK)
-            .open(path)?;
-        let registration = Registration::new(&EventedFd(&file.as_raw_fd()))?;
+            .open(path)
+            .and_then(AsyncFd::new)?;
 
         let mut evdev = MaybeUninit::uninit();
         let ret = unsafe { glue::libevdev_new_from_fd(file.as_raw_fd(), evdev.as_mut_ptr()) };
@@ -46,19 +41,35 @@ impl EventReader {
             return Err(Error::from_raw_os_error(-ret));
         }
 
-        Ok(Self {
-            file,
-            registration,
-            evdev,
-        })
+        Ok(Self { file, evdev })
     }
 
     pub async fn read(&mut self) -> Result<input_event, Error> {
-        Read {
-            reader: self,
-            polling: false,
+        loop {
+            let result = self.file.readable().await?.with_io(|| {
+                let mut event = MaybeUninit::uninit();
+                let ret = unsafe {
+                    glue::libevdev_next_event(
+                        self.evdev,
+                        glue::libevdev_read_flag_LIBEVDEV_READ_FLAG_NORMAL,
+                        event.as_mut_ptr(),
+                    )
+                };
+
+                if ret < 0 {
+                    return Err(Error::from_raw_os_error(-ret));
+                }
+
+                let event = unsafe { event.assume_init() };
+                Ok(event)
+            });
+
+            match result {
+                Ok(event) => return Ok(event),
+                Err(ref err) if err.kind() == ErrorKind::WouldBlock => {}
+                Err(err) => return Err(err),
+            }
         }
-        .await
     }
 }
 
@@ -71,43 +82,3 @@ impl Drop for EventReader {
 }
 
 unsafe impl Send for EventReader {}
-
-struct Read<'a> {
-    reader: &'a mut EventReader,
-    polling: bool,
-}
-
-impl Future for Read<'_> {
-    type Output = Result<input_event, Error>;
-
-    fn poll(mut self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
-        if self.polling {
-            if let Poll::Pending = self.reader.registration.poll_read_ready(context)? {
-                return Poll::Pending;
-            }
-        }
-
-        let mut event = MaybeUninit::uninit();
-        let ret = unsafe {
-            glue::libevdev_next_event(
-                self.reader.evdev,
-                glue::libevdev_read_flag_LIBEVDEV_READ_FLAG_NORMAL,
-                event.as_mut_ptr(),
-            )
-        };
-
-        if !self.polling && ret == -libc::EAGAIN {
-            self.polling = true;
-            return self.poll(context);
-        }
-
-        self.polling = false;
-
-        if ret < 0 {
-            return Poll::Ready(Err(Error::from_raw_os_error(-ret)));
-        }
-
-        let event = unsafe { event.assume_init() };
-        Poll::Ready(Ok(event))
-    }
-}
