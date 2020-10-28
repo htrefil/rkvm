@@ -1,1 +1,2 @@
-server = "123.45.67.89:5258"
+server = "localhost:5258"
+certificate-path = "certificate.pem"
