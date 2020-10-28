@@ -1,11 +1,13 @@
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Formatter};
+use std::path::PathBuf;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub server: Server,
+    pub certificate_path: PathBuf,
 }
 
 pub struct Server {
