@@ -54,17 +54,24 @@ impl EventWriter {
         // As far as tokio is concerned, the FD never becomes ready for writing, so just write it normally.
         // If an error happens, it will be propagated to caller and the FD is opened in nonblocking mode anyway,
         // so it shouldn't be an issue.
-        let ret = unsafe {
-            glue::libevdev_uinput_write_event(
-                self.uinput as *const _,
-                event.type_ as _,
-                event.code as _,
-                event.value,
-            )
-        };
+        let events = [
+            (event.type_, event.code, event.value),
+            (glue::EV_SYN as _, glue::SYN_REPORT as _, 0), // Include EV_SYN.
+        ];
 
-        if ret < 0 {
-            return Err(Error::from_raw_os_error(-ret));
+        for (r#type, code, value) in events.iter().cloned() {
+            let ret = unsafe {
+                glue::libevdev_uinput_write_event(
+                    self.uinput as *const _,
+                    r#type as _,
+                    code as _,
+                    value,
+                )
+            };
+
+            if ret < 0 {
+                return Err(Error::from_raw_os_error(-ret));
+            }
         }
 
         Ok(())
