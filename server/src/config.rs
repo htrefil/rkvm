@@ -1,13 +1,14 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub listen_address: SocketAddr,
     pub switch_keys: HashSet<u16>,
     pub identity_path: PathBuf,
+    #[serde(default)]
     pub identity_password: String,
 }
