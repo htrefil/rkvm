@@ -39,4 +39,4 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 Regardless, PRs are welcome.
 
 ## License
-[LICENSE](MIT)
+[MIT](LICENSE)
