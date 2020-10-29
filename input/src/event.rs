@@ -12,7 +12,6 @@ pub enum Event {
     MouseScroll { delta: i32 },
     MouseMove { axis: Axis, delta: i32 },
     Key { direction: Direction, kind: KeyKind },
-    Sync,
 }
 
 impl Event {
@@ -35,7 +34,6 @@ impl Event {
                 direction: Direction::Down,
                 kind,
             } => (glue::EV_KEY as _, kind.to_raw(), 1),
-            Event::Sync => (glue::EV_SYN as _, glue::SYN_REPORT as _, 0),
         };
 
         input_event {
@@ -68,7 +66,6 @@ impl Event {
                 direction: Direction::Down,
                 kind: KeyKind::from_raw(code as _)?,
             },
-            (glue::EV_SYN, glue::SYN_REPORT, _) => Event::Sync,
             _ => return None,
         };
 
