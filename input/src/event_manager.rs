@@ -1,14 +1,14 @@
 use crate::event::Event;
 use crate::event_reader::EventReader;
 use crate::event_writer::EventWriter;
-use crate::glue::input_event;
 use std::io::{Error, ErrorKind};
+use std::time::Duration;
 use tokio::fs;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 pub struct EventManager {
     writer: EventWriter,
-    receiver: UnboundedReceiver<Result<input_event, Error>>,
+    receiver: UnboundedReceiver<Result<Event, Error>>,
 }
 
 impl EventManager {
@@ -38,23 +38,18 @@ impl EventManager {
         }
 
         let writer = EventWriter::new().await?;
+
+        // Sleep for a while to give userspace time to register our devices.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
         Ok(EventManager { writer, receiver })
     }
 
     pub async fn read(&mut self) -> Result<Event, Error> {
-        loop {
-            let event = self
-                .receiver
-                .recv()
-                .await
-                .ok_or_else(|| Error::new(ErrorKind::Other, "All devices closed"))??;
-            if let Some(event) = Event::from_raw(event) {
-                return Ok(event);
-            }
-
-            // Not understood. Write it back.
-            self.writer.write_raw(event).await?;
-        }
+        self.receiver
+            .recv()
+            .await
+            .ok_or_else(|| Error::new(ErrorKind::Other, "All devices closed"))?
     }
 
     pub async fn write(&mut self, event: Event) -> Result<(), Error> {
@@ -62,10 +57,7 @@ impl EventManager {
     }
 }
 
-async fn handle_events(
-    mut reader: EventReader,
-    sender: UnboundedSender<Result<input_event, Error>>,
-) {
+async fn handle_events(mut reader: EventReader, sender: UnboundedSender<Result<Event, Error>>) {
     loop {
         let result = match reader.read().await {
             Ok(event) => sender.send(Ok(event)).is_ok(),
