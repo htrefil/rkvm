@@ -1,11 +1,11 @@
 mod config;
 
+use anyhow::{Context, Error};
 use config::Config;
 use input::{Direction, Event, EventManager};
 use net::{self, Message, PROTOCOL_VERSION};
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
-use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -29,12 +29,10 @@ where
 
     let version = net::read_version(&mut stream).await?;
     if version != PROTOCOL_VERSION {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            format!(
-                "Incompatible protocol version (got {}, expecting {})",
-                version, PROTOCOL_VERSION
-            ),
+        return Err(anyhow::anyhow!(
+            "Incompatible protocol version (got {}, expecting {})",
+            version,
+            PROTOCOL_VERSION
         ));
     }
 
@@ -55,11 +53,13 @@ async fn run(
     identity_path: &Path,
     identity_password: &str,
 ) -> Result<Infallible, Error> {
-    let identity = fs::read(identity_path).await?;
-    let identity = Identity::from_pkcs12(&identity, identity_password)
-        .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+    let identity = fs::read(identity_path)
+        .await
+        .context("Failed to read identity")?;
+    let identity =
+        Identity::from_pkcs12(&identity, identity_password).context("Failed to parse identity")?;
     let acceptor: tokio_native_tls::TlsAcceptor = TlsAcceptor::new(identity)
-        .map_err(|err| Error::new(ErrorKind::InvalidData, err))
+        .context("Failed to create TLS acceptor")
         .map(Into::into)?;
     let listener = TcpListener::bind(listen_address).await?;
 
@@ -185,7 +185,7 @@ async fn main() {
     tokio::select! {
         result = run(config.listen_address, &config.switch_keys, &config.identity_path, &config.identity_password) => {
             if let Err(err) = result {
-                log::error!("Error: {}", err);
+                log::error!("Error: {:#}", err);
                 process::exit(1);
             }
         }

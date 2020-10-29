@@ -159,6 +159,7 @@ dependencies = [
 name = "client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "env_logger 0.8.1",
  "input",
  "log",
@@ -659,6 +660,7 @@ dependencies = [
 name = "server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "env_logger 0.8.1",
  "input",
  "log",
