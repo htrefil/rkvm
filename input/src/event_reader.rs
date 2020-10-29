@@ -1,4 +1,5 @@
-use crate::glue::{self, input_event, libevdev};
+use crate::event::Event;
+use crate::glue::{self, libevdev, libevdev_uinput};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
@@ -10,6 +11,7 @@ use tokio::io::unix::AsyncFd;
 pub(crate) struct EventReader {
     file: AsyncFd<File>,
     evdev: *mut libevdev,
+    uinput: *mut libevdev_uinput,
 }
 
 impl EventReader {
@@ -41,10 +43,29 @@ impl EventReader {
             return Err(Error::from_raw_os_error(-ret));
         }
 
-        Ok(Self { file, evdev })
+        let mut uinput = MaybeUninit::uninit();
+        let ret = unsafe {
+            glue::libevdev_uinput_create_from_device(
+                evdev,
+                glue::libevdev_uinput_open_mode_LIBEVDEV_UINPUT_OPEN_MANAGED,
+                uinput.as_mut_ptr(),
+            )
+        };
+
+        if ret < 0 {
+            unsafe { glue::libevdev_free(evdev) };
+            return Err(Error::from_raw_os_error(-ret));
+        }
+
+        let uinput = unsafe { uinput.assume_init() };
+        Ok(Self {
+            file,
+            evdev,
+            uinput,
+        })
     }
 
-    pub async fn read(&mut self) -> Result<input_event, Error> {
+    pub async fn read(&mut self) -> Result<Event, Error> {
         loop {
             let result = self.file.readable().await?.with_io(|| {
                 let mut event = MaybeUninit::uninit();
@@ -64,10 +85,28 @@ impl EventReader {
                 Ok(event)
             });
 
-            match result {
-                Ok(event) => return Ok(event),
-                Err(ref err) if err.kind() == ErrorKind::WouldBlock => {}
+            let event = match result {
+                Ok(event) => event,
+                Err(ref err) if err.kind() == ErrorKind::WouldBlock => continue,
                 Err(err) => return Err(err),
+            };
+
+            if let Some(event) = Event::from_raw(event) {
+                return Ok(event);
+            }
+
+            // Not understood, write it back.
+            let ret = unsafe {
+                glue::libevdev_uinput_write_event(
+                    self.uinput as *const _,
+                    event.type_ as _,
+                    event.code as _,
+                    event.value,
+                )
+            };
+
+            if ret < 0 {
+                return Err(Error::from_raw_os_error(-ret));
             }
         }
     }
@@ -76,6 +115,7 @@ impl EventReader {
 impl Drop for EventReader {
     fn drop(&mut self) {
         unsafe {
+            glue::libevdev_uinput_destroy(self.uinput);
             glue::libevdev_free(self.evdev);
         }
     }
