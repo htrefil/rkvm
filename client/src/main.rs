@@ -1,10 +1,10 @@
 mod config;
 
+use anyhow::{Context, Error};
 use config::Config;
 use input::EventWriter;
 use net::{self, Message, PROTOCOL_VERSION};
 use std::convert::Infallible;
-use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::process;
 use structopt::StructOpt;
@@ -13,22 +13,24 @@ use tokio::net::TcpStream;
 use tokio_native_tls::native_tls::{Certificate, TlsConnector};
 
 async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infallible, Error> {
-    let certificate = fs::read(certificate_path).await?;
+    let certificate = fs::read(certificate_path)
+        .await
+        .context("Failed to read certificate")?;
     let certificate = Certificate::from_der(&certificate)
         .or_else(|_| Certificate::from_pem(&certificate))
-        .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+        .context("Failed to parse certificate")?;
 
     let connector: tokio_native_tls::TlsConnector = TlsConnector::builder()
         .add_root_certificate(certificate)
         .build()
-        .map_err(|err| Error::new(ErrorKind::InvalidData, err))
-        .map(Into::into)?;
+        .context("Failed to create connector")?
+        .into();
 
     let stream = TcpStream::connect((server, port)).await?;
     let mut stream = connector
         .connect(server, stream)
         .await
-        .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+        .context("Failed to connect")?;
 
     log::info!("Connected to {}:{}", server, port);
 
@@ -36,12 +38,10 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
 
     let version = net::read_version(&mut stream).await?;
     if version != PROTOCOL_VERSION {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            format!(
-                "Incompatible protocol version (got {}, expecting {})",
-                version, PROTOCOL_VERSION
-            ),
+        return Err(anyhow::anyhow!(
+            "Incompatible protocol version (got {}, expecting {})",
+            version,
+            PROTOCOL_VERSION
         ));
     }
 
@@ -89,7 +89,7 @@ async fn main() {
     tokio::select! {
         result = run(&config.server.hostname, config.server.port, &config.certificate_path) => {
             if let Err(err) = result {
-                log::error!("Error: {}", err);
+                log::error!("Error: {:#}", err);
                 process::exit(1);
             }
         }
