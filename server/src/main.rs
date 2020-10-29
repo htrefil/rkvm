@@ -2,7 +2,7 @@ mod config;
 
 use anyhow::{Context, Error};
 use config::Config;
-use input::{Direction, Event, EventManager};
+use input::{Direction, Event, EventManager, Key, KeyKind};
 use net::{self, Message, PROTOCOL_VERSION};
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
@@ -49,7 +49,7 @@ where
 
 async fn run(
     listen_address: SocketAddr,
-    switch_keys: &HashSet<u16>,
+    switch_keys: &HashSet<Key>,
     identity_path: &Path,
     identity_password: &str,
 ) -> Result<Infallible, Error> {
@@ -113,8 +113,8 @@ async fn run(
         tokio::select! {
             event = manager.read() => {
                 let event = event?;
-                if let Event::Key { direction, code } = event {
-                    if let Some(state) = key_states.get_mut(&code) {
+                if let Event::Key { direction, kind: KeyKind::Key(key) } = event {
+                    if let Some(state) = key_states.get_mut(&key) {
                         *state = if direction == Direction::Down {
                             true
                         } else {

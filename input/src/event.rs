@@ -1,3 +1,9 @@
+mod button;
+mod key;
+
+pub use button::Button;
+pub use key::Key;
+
 use crate::glue::{self, input_event, timeval};
 use serde::{Deserialize, Serialize};
 
@@ -5,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub enum Event {
     MouseScroll { delta: i32 },
     MouseMove { axis: Axis, delta: i32 },
-    Key { direction: Direction, code: u16 },
+    Key { direction: Direction, kind: KeyKind },
     Sync,
 }
 
@@ -23,12 +29,12 @@ impl Event {
             } => (glue::EV_REL as _, glue::REL_Y as _, delta),
             Event::Key {
                 direction: Direction::Up,
-                code,
-            } => (glue::EV_KEY as _, code, 0),
+                kind,
+            } => (glue::EV_KEY as _, kind.to_raw(), 0),
             Event::Key {
                 direction: Direction::Down,
-                code,
-            } => (glue::EV_KEY as _, code, 1),
+                kind,
+            } => (glue::EV_KEY as _, kind.to_raw(), 1),
             Event::Sync => (glue::EV_SYN as _, glue::SYN_REPORT as _, 0),
         };
 
@@ -56,11 +62,11 @@ impl Event {
             },
             (glue::EV_KEY, code, 0) => Event::Key {
                 direction: Direction::Up,
-                code: code as _,
+                kind: KeyKind::from_raw(code as _)?,
             },
             (glue::EV_KEY, code, 1) => Event::Key {
                 direction: Direction::Down,
-                code: code as _,
+                kind: KeyKind::from_raw(code as _)?,
             },
             (glue::EV_SYN, glue::SYN_REPORT, _) => Event::Sync,
             _ => return None,
@@ -80,4 +86,25 @@ pub enum Axis {
 pub enum Direction {
     Up,   // The key is released.
     Down, // The key is pressed.
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyKind {
+    Key(Key),
+    Button(Button),
+}
+
+impl KeyKind {
+    pub(crate) fn to_raw(&self) -> u16 {
+        match self {
+            KeyKind::Key(key) => key.to_raw(),
+            KeyKind::Button(button) => button.to_raw(),
+        }
+    }
+
+    pub(crate) fn from_raw(code: u16) -> Option<KeyKind> {
+        Key::from_raw(code)
+            .map(KeyKind::Key)
+            .or_else(|| Button::from_raw(code).map(KeyKind::Button))
+    }
 }

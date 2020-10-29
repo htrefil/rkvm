@@ -1,5 +1,5 @@
 listen-address = "0.0.0.0:5258"
-switch-keys = [29, 56, 111]
+switch-keys = ["Leftalt"]
 identity-path = "identity.p12"
 # Doesn't have to be set.
 identity-password = "123456789"
