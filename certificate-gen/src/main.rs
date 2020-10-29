@@ -1,4 +1,5 @@
 use anyhow::{Context, Error};
+use std::env;
 use std::fmt::Write as _;
 use std::io::Write;
 use std::net::IpAddr;
@@ -52,7 +53,8 @@ subjectAltName = @alt_names
     file.write_all(config.as_bytes())
         .context("Failed to write to config file")?;
 
-    let code = Command::new("openssl")
+    let openssl = env::var_os("OPENSSL").unwrap_or_else(|| "openssl".to_owned().into());
+    let code = Command::new(&openssl)
         .arg("req")
         .arg("-sha256")
         .arg("-x509")
@@ -75,7 +77,7 @@ subjectAltName = @alt_names
         return Err(anyhow::anyhow!("OpenSSL exited unsuccessfully"));
     }
 
-    let code = Command::new("openssl")
+    let code = Command::new(&openssl)
         .arg("pkcs12")
         .arg("-export")
         .arg("-out")
