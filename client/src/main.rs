@@ -3,6 +3,7 @@ mod config;
 use anyhow::{Context, Error};
 use config::Config;
 use input::EventWriter;
+use log::LevelFilter;
 use net::{self, Message, PROTOCOL_VERSION};
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
@@ -69,7 +70,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    env_logger::builder().format_timestamp(None).init();
+    env_logger::builder()
+        .format_timestamp(None)
+        .filter(None, LevelFilter::Info)
+        .init();
 
     let args = Args::from_args();
     let config = match fs::read_to_string(&args.config_path).await {
