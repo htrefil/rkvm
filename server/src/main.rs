@@ -123,6 +123,7 @@ async fn run(
                     }
                 }
 
+                // TODO: This won't work with multiple keys.
                 if key_states.iter().filter(|(_, state)| **state).count() == key_states.len() {
                     for (_, state) in &mut key_states {
                         *state = false;
@@ -130,6 +131,7 @@ async fn run(
 
                     current = (current + 1) % (clients.len() + 1);
                     log::info!("Switching to client {}", current);
+                    continue;
                 }
 
                 if current != 0 {
