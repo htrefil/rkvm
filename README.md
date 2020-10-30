@@ -9,6 +9,11 @@ Switching between different clients is done by a configurable keyboard shortcut.
 - Display server agnostic
 - Low overhead
 
+## Requirements
+- The uinput Linux kernel module, enabled by default in most distros
+- libevdev
+- Rust 1.48 and higher
+
 ## Building
 Run `cargo build --release`. 
 Note that you need to have libevdev installed on your system, otherwise the build will fail.
