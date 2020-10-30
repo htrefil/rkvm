@@ -12,6 +12,7 @@ use structopt::StructOpt;
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio::net::TcpStream;
+use tokio::time;
 use tokio_native_tls::native_tls::{Certificate, TlsConnector};
 
 async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infallible, Error> {
@@ -50,7 +51,9 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
 
     let mut writer = EventWriter::new().await?;
     loop {
-        let message = net::read_message(&mut stream).await?;
+        let message = time::timeout(net::MESSAGE_TIMEOUT, net::read_message(&mut stream))
+            .await
+            .context("Read timed out")??;
         match message {
             Message::Event(event) => writer.write(event).await?,
             Message::KeepAlive => {}
