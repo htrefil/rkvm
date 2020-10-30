@@ -10,7 +10,6 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process;
-use std::time::Duration;
 use structopt::StructOpt;
 use tokio::fs;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -38,7 +37,8 @@ where
     }
 
     loop {
-        let message = match time::timeout(Duration::from_secs(10), receiver.recv()).await {
+        // Sent a keep alive message in intervals of half of the timeout just to be on the safe side.
+        let message = match time::timeout(net::MESSAGE_TIMEOUT / 2, receiver.recv()).await {
             Ok(Some(message)) => Message::Event(message),
             Ok(None) => return Ok(()),
             Err(_) => Message::KeepAlive,
