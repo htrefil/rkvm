@@ -1,6 +1,6 @@
 listen-address = "0.0.0.0:5258"
 # Switch to next client by pressing the left alt key.
-switch-keys = ["Leftalt"]
+switch-keys = ["LeftAlt"]
 identity-path = "identity.p12"
 # Leave unset if no password is set.
 identity-password = "123456789"
