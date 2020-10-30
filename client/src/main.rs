@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process;
 use structopt::StructOpt;
 use tokio::fs;
+use tokio::io::BufReader;
 use tokio::net::TcpStream;
 use tokio_native_tls::native_tls::{Certificate, TlsConnector};
 
@@ -27,6 +28,7 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
         .into();
 
     let stream = TcpStream::connect((server, port)).await?;
+    let stream = BufReader::new(stream);
     let mut stream = connector
         .connect(server, stream)
         .await
