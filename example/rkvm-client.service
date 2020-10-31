@@ -1,0 +1,12 @@
+[Unit]
+Description=rkvm client
+After=network-online.target
+
+[Service]
+ExecStart=/opt/rkvm/client
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

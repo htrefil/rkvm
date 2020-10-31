@@ -28,7 +28,7 @@ You either need to run either of the programs as root or make `/dev/uinput` acce
 
 By default, the programs reads their config files from /etc/rkvm/{server,client}.toml, this can be changed by passing the path as the first command line parameter.
 
-The [example](example) directory contains example configurations.
+The [example](example) directory contains example configurations and systemd service files.
 
 ## Why rkvm and not Barrier/Synergy?
 The author of this program had a lot of problems with said programs, namely his keyboard layout (Czech) not being supported properly, which stems from the fact that the programs send characters which it then attempts to translate back into keycodes. rkvm takes a different approach to solving this problem and doesn't assume anything about your keyboard layout -- it sends raw keycodes only.
