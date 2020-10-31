@@ -37,14 +37,19 @@ where
     }
 
     loop {
-        // Sent a keep alive message in intervals of half of the timeout just to be on the safe side.
+        // Send a keep alive message in intervals of half of the timeout just to be on the safe side.
         let message = match time::timeout(net::MESSAGE_TIMEOUT / 2, receiver.recv()).await {
             Ok(Some(message)) => Message::Event(message),
             Ok(None) => return Ok(()),
             Err(_) => Message::KeepAlive,
         };
 
-        net::write_message(&mut stream, &message).await?;
+        time::timeout(
+            net::MESSAGE_TIMEOUT,
+            net::write_message(&mut stream, &message),
+        )
+        .await
+        .context("Write timeout")??;
     }
 }
 
