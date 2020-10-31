@@ -26,6 +26,8 @@ Run `cargo run certificate-gen -- --help` to see and usage.
 First, build the project and generate certificates. Client accepts certificates both in PEM and DER formats.
 You either need to run either of the programs as root or make `/dev/uinput` accessible by the user it runs as.
 
+By default, the programs reads their config files from /etc/rkvm/{server,client}.toml, this can be changed by passing the path as the first command line parameter.
+
 The [example](example) directory contains example configurations.
 
 ## Why rkvm and not Barrier/Synergy?
@@ -37,7 +39,6 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 
 ## Limitations
 - Only keyboard and relative mouse events work (that is, can be forwarded to clients)
-- Absolute mouse events (touchpad) doesn't work at all while running in server mode
 - No Windows or macOS support
 - No way to disable event forwarding on per user basis
 
