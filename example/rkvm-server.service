@@ -1,0 +1,10 @@
+[Unit]
+Description=rkvm server
+After=network-online.target
+
+[Service]
+ExecStart=/opt/rkvm/server
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
