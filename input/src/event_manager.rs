@@ -61,6 +61,9 @@ async fn handle_events(mut reader: EventReader, sender: UnboundedSender<Result<E
     loop {
         let result = match reader.read().await {
             Ok(event) => sender.send(Ok(event)).is_ok(),
+            // This happens if the device is disconnected.
+            // In that case simply terminate the reading task.
+            Err(ref err) if err.raw_os_error() == Some(libc::ENOTTY) => false,
             Err(err) => {
                 let _ = sender.send(Err(err));
                 false
