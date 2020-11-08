@@ -491,6 +491,14 @@ pub enum Key {
     ZoomOut,
     ZoomReset,
 }
+//This is implemented in the platforms folder, depending
+//on which platform is used.
+pub(crate) trait KeyCode {
+    fn from_raw(code: u16) -> Option<Self>
+    where
+        Self: Sized;
+    fn to_raw(&self) -> Option<u16>;
+}
 impl PartialEq for Key {
     fn eq(&self, other: &Self) -> bool {
         self.to_raw() == other.to_raw()
