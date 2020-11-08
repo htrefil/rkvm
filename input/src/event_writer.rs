@@ -1,3 +1,4 @@
+use crate::device_id;
 use crate::event::Event;
 use crate::glue::{self, input_event, libevdev, libevdev_uinput};
 use std::io::{Error, ErrorKind};
@@ -97,9 +98,9 @@ const TYPES: &[(u32, &[RangeInclusive<u32>])] = &[
 
 unsafe fn setup_evdev(evdev: *mut libevdev) -> Result<(), Error> {
     glue::libevdev_set_name(evdev, b"rkvm\0".as_ptr() as *const _);
-    glue::libevdev_set_id_product(evdev, 1);
-    glue::libevdev_set_id_version(evdev, 1);
-    glue::libevdev_set_id_vendor(evdev, i32::from_be_bytes(*b"rkvm"));
+    glue::libevdev_set_id_vendor(evdev, device_id::VENDOR as _);
+    glue::libevdev_set_id_product(evdev, device_id::PRODUCT as _);
+    glue::libevdev_set_id_version(evdev, device_id::VERSION as _);
     glue::libevdev_set_id_bustype(evdev, glue::BUS_USB as _);
 
     for (r#type, codes) in TYPES.iter().copied() {

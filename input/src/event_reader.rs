@@ -1,3 +1,4 @@
+use crate::device_id;
 use crate::event::Event;
 use crate::glue::{self, libevdev, libevdev_uinput};
 use std::fs::{File, OpenOptions};
@@ -15,12 +16,14 @@ pub(crate) struct EventReader {
 }
 
 impl EventReader {
-    pub async fn new(path: &Path) -> Result<Self, Error> {
+    pub async fn open(path: &Path) -> Result<Self, OpenError> {
         let path = path.to_owned();
-        tokio::task::spawn_blocking(move || Self::new_sync(&path)).await?
+        tokio::task::spawn_blocking(move || Self::open_sync(&path))
+            .await
+            .map_err(|err| OpenError::Io(err.into()))?
     }
 
-    fn new_sync(path: &Path) -> Result<Self, Error> {
+    fn open_sync(path: &Path) -> Result<Self, OpenError> {
         let file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NONBLOCK)
@@ -30,17 +33,43 @@ impl EventReader {
         let mut evdev = MaybeUninit::uninit();
         let ret = unsafe { glue::libevdev_new_from_fd(file.as_raw_fd(), evdev.as_mut_ptr()) };
         if ret < 0 {
-            return Err(Error::from_raw_os_error(-ret));
+            return Err(Error::from_raw_os_error(-ret).into());
         }
 
         let evdev = unsafe { evdev.assume_init() };
+        let (vendor, product, version) = unsafe {
+            (
+                glue::libevdev_get_id_vendor(evdev),
+                glue::libevdev_get_id_product(evdev),
+                glue::libevdev_get_id_version(evdev),
+            )
+        };
+
+        // Check if we're not opening our own virtual device.
+        if vendor == device_id::VENDOR as _
+            && product == device_id::PRODUCT as _
+            && version == device_id::VERSION as _
+        {
+            unsafe {
+                glue::libevdev_free(evdev);
+            }
+
+            return Err(OpenError::AlreadyOpened);
+        }
+
+        unsafe {
+            glue::libevdev_set_id_vendor(evdev, device_id::VENDOR as _);
+            glue::libevdev_set_id_product(evdev, device_id::PRODUCT as _);
+            glue::libevdev_set_id_version(evdev, device_id::VERSION as _);
+        }
+
         let ret = unsafe { glue::libevdev_grab(evdev, glue::libevdev_grab_mode_LIBEVDEV_GRAB) };
         if ret < 0 {
             unsafe {
                 glue::libevdev_free(evdev);
             }
 
-            return Err(Error::from_raw_os_error(-ret));
+            return Err(Error::from_raw_os_error(-ret).into());
         }
 
         let mut uinput = MaybeUninit::uninit();
@@ -54,7 +83,7 @@ impl EventReader {
 
         if ret < 0 {
             unsafe { glue::libevdev_free(evdev) };
-            return Err(Error::from_raw_os_error(-ret));
+            return Err(Error::from_raw_os_error(-ret).into());
         }
 
         let uinput = unsafe { uinput.assume_init() };
@@ -122,3 +151,14 @@ impl Drop for EventReader {
 }
 
 unsafe impl Send for EventReader {}
+
+pub enum OpenError {
+    AlreadyOpened,
+    Io(Error),
+}
+
+impl From<Error> for OpenError {
+    fn from(err: Error) -> Self {
+        OpenError::Io(err)
+    }
+}

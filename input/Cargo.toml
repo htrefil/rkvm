@@ -7,9 +7,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "0.3.2", features = ["fs", "io-util", "net", "sync", "rt", "time"] }
+tokio = { version = "0.3.3", features = ["fs", "io-util", "net", "sync", "rt", "time"] }
 libc = "0.2.77"
 serde = { version = "1.0.117", features = ["derive"] }
+# Temporary solution until my changes get through.
+inotify = { git = "https://github.com/htrefil/inotify/" }
+futures = "0.3.7"
 
 [build-dependencies]
 bindgen = "0.55.1"
