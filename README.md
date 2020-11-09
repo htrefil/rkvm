@@ -46,6 +46,8 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 - `client` - client application code
 - `input` - handles reading from and writing to input devices
 - `net` - network protocol encoding and decoding
+- `certificate-gen` - certificate generation tool
+
 [Bincode](https://github.com/servo/bincode) is used for encoding of messages on the network and [Tokio](https://tokio.rs) as an asynchronous runtime.
 
 ## Contributions
