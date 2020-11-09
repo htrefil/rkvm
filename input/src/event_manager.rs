@@ -9,6 +9,7 @@ use std::time::Duration;
 use tokio::fs;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot::{self, Receiver};
+use tokio::time;
 
 const EVENT_PATH: &str = "/dev/input";
 
@@ -22,6 +23,16 @@ impl EventManager {
     pub async fn new() -> Result<Self, Error> {
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
+        // HACK: When rkvm is run from the terminal, a race condition happens where the enter key
+        // release event is swallowed and the key will remain in a "pressed" state until the user manually presses it again.
+        // This is presumably due to the event being generated while we're in the process of grabbing
+        // the keyboard input device.
+        //
+        // This won't prevent this from happenning with other keys if they happen to be pressed at an
+        // unfortunate time, but that is unlikely to happen and will ease the life of people who run rkvm
+        // directly from the terminal for the time being until a proper fix is made.
+        time::sleep(Duration::from_millis(500)).await;
+
         let mut read_dir = fs::read_dir(EVENT_PATH).await?;
         while let Some(entry) = read_dir.next_entry().await? {
             spawn_reader(&entry.path(), event_sender.clone()).await?;
@@ -30,7 +41,7 @@ impl EventManager {
         let writer = EventWriter::new().await?;
 
         // Sleep for a while to give userspace time to register our devices.
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        time::sleep(Duration::from_secs(1)).await;
 
         let (watcher_sender, watcher_receiver) = oneshot::channel();
         tokio::spawn(async {
