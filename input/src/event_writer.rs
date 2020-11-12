@@ -12,7 +12,7 @@ pub struct EventWriter {
 
 impl EventWriter {
     pub async fn new() -> Result<Self, Error> {
-        tokio::task::spawn_blocking(|| Self::new_sync()).await?
+        tokio::task::spawn_blocking(Self::new_sync).await?
     }
 
     fn new_sync() -> Result<Self, Error> {
@@ -109,7 +109,7 @@ unsafe fn setup_evdev(evdev: *mut libevdev) -> Result<(), Error> {
             return Err(Error::from_raw_os_error(-ret));
         }
 
-        for code in codes.iter().cloned().flat_map(|code| code) {
+        for code in codes.iter().cloned().flatten() {
             let ret = glue::libevdev_enable_event_code(evdev, r#type, code, std::ptr::null_mut());
             if ret < 0 {
                 return Err(Error::from_raw_os_error(-ret));

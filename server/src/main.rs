@@ -101,7 +101,7 @@ async fn run(
                     .await
                     .err()
                     .map(|err| format!(" ({})", err))
-                    .unwrap_or(String::new());
+                    .unwrap_or_else(String::new);
                 log::info!("{}: disconnected{}", address, message);
             });
         }
@@ -121,17 +121,13 @@ async fn run(
                 let event = event?;
                 if let Event::Key { direction, kind: KeyKind::Key(key) } = event {
                     if let Some(state) = key_states.get_mut(&key) {
-                        *state = if direction == Direction::Down {
-                            true
-                        } else {
-                            false
-                        };
+                        *state = direction == Direction::Down;
                     }
                 }
 
                 // TODO: This won't work with multiple keys.
                 if key_states.iter().filter(|(_, state)| **state).count() == key_states.len() {
-                    for (_, state) in &mut key_states {
+                    for state in key_states.values_mut() {
                         *state = false;
                     }
 

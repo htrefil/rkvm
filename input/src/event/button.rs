@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Copy, Debug, Eq, Serialize, Deserialize, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Serialize, Deserialize)]
 pub enum Button {
     A,
     B,
@@ -254,7 +255,7 @@ impl Button {
         use Button::*;
 
         // This is generated from linux headers, some patterns are unreachable, and we don't care.
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, clippy::match_overlapping_arm)]
         let button = match code {
             0x0130 => A,
             0x0131 => B,
@@ -383,5 +384,14 @@ impl Button {
 impl PartialEq for Button {
     fn eq(&self, other: &Self) -> bool {
         self.to_raw() == other.to_raw()
+    }
+}
+
+impl Hash for Button {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.to_raw().hash(state)
     }
 }
