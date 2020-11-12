@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 // Is it bold to assume there won't be more than 65536 protocol versions?
-pub const PROTOCOL_VERSION: u16 = 0;
+pub const PROTOCOL_VERSION: u16 = 1;
 pub const MESSAGE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub async fn read_version<R>(mut reader: R) -> Result<u16, Error>
@@ -31,10 +31,10 @@ where
     R: AsyncRead + Unpin,
 {
     let length = {
-        let mut bytes = [0; 2];
+        let mut bytes = [0; 1];
         reader.read_exact(&mut bytes).await?;
 
-        u16::from_le_bytes(bytes)
+        bytes[0]
     };
 
     let mut data = vec![0; length as usize];
@@ -49,7 +49,7 @@ where
 {
     let data =
         bincode::serialize(&message).map_err(|err| Error::new(ErrorKind::InvalidInput, err))?;
-    let length: u16 = data
+    let length: u8 = data
         .len()
         .try_into()
         .map_err(|_| Error::new(ErrorKind::InvalidInput, "Serialized data is too large"))?;
