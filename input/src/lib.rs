@@ -1,10 +1,4 @@
-#[cfg(target_os = "linux")]
-mod device_id;
-
 mod event;
-
-#[cfg(target_os = "linux")]
-mod glue;
 
 #[cfg(target_os = "linux")]
 mod linux;

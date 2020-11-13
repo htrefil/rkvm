@@ -1,8 +1,8 @@
 mod button;
 mod key;
 
-use crate::event::{Axis, Direction, Event, KeyKind};
-use crate::glue::{self, input_event, timeval};
+use crate::event::{Axis, Button, Direction, Event, Key, KeyKind};
+use crate::linux::glue::{self, input_event, timeval};
 
 impl Event {
     pub(crate) fn to_raw(&self) -> Option<input_event> {

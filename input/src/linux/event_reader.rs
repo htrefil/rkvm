@@ -1,6 +1,6 @@
-use crate::device_id;
 use crate::event::Event;
-use crate::glue::{self, libevdev, libevdev_uinput};
+use crate::linux::device_id;
+use crate::linux::glue::{self, libevdev, libevdev_uinput};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
