@@ -62,3 +62,11 @@ impl Event {
         Some(event)
     }
 }
+
+impl KeyKind {
+    pub(crate) fn from_raw(code: u16) -> Option<KeyKind> {
+        Key::from_raw(code)
+            .map(KeyKind::Key)
+            .or_else(|| Button::from_raw(code).map(KeyKind::Button))
+    }
+}

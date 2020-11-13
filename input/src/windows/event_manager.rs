@@ -12,7 +12,7 @@ impl EventManager {
         todo!()
     }
 
-    pub async fn write(&mut self, event: Event) -> Result<(), Error> {
+    pub async fn write(&mut self, _event: Event) -> Result<(), Error> {
         todo!()
     }
 }
