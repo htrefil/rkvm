@@ -1,16 +1,17 @@
 mod button;
 mod key;
 
-use crate::event::{Axis, Direction, Event};
+use crate::event::{Axis, Button, Direction, Event, KeyKind};
 use winapi::um::winuser::{self, INPUT_u, INPUT, KEYBDINPUT, MOUSEINPUT};
 
 impl Event {
     pub(crate) fn to_raw(&self) -> Option<INPUT> {
-        let event = match *self {
-            Event::MouseScroll { delta } => INPUT {
-                type_: winuser::INPUT_MOUSE,
-                u: {
-                    let mi = MOUSEINPUT {
+        let mut u: INPUT_u = unsafe { std::mem::zeroed() };
+        let type_ = match *self {
+            Event::MouseScroll { delta } => {
+                let delta = delta * 100;
+                unsafe {
+                    *u.mi_mut() = MOUSEINPUT {
                         dx: 0,
                         dy: 0,
                         mouseData: if delta == winuser::WHEEL_DELTA as _ {
@@ -22,22 +23,16 @@ impl Event {
                         time: 0,
                         dwExtraInfo: 0,
                     };
+                }
 
-                    unsafe {
-                        let mut u: INPUT_u = std::mem::zeroed();
-                        *u.mi_mut() = mi;
-
-                        u
-                    }
-                },
-            },
+                winuser::INPUT_MOUSE
+            }
             Event::MouseMove {
                 axis: Axis::X,
                 delta,
-            } => INPUT {
-                type_: winuser::INPUT_MOUSE,
-                u: {
-                    let mi = MOUSEINPUT {
+            } => {
+                unsafe {
+                    *u.mi_mut() = MOUSEINPUT {
                         dx: delta,
                         dy: 0,
                         mouseData: 0,
@@ -45,22 +40,16 @@ impl Event {
                         time: 0,
                         dwExtraInfo: 0,
                     };
+                }
 
-                    unsafe {
-                        let mut u: INPUT_u = std::mem::zeroed();
-                        *u.mi_mut() = mi;
-
-                        u
-                    }
-                },
-            },
+                winuser::INPUT_MOUSE
+            }
             Event::MouseMove {
                 axis: Axis::Y,
                 delta,
-            } => INPUT {
-                type_: winuser::INPUT_MOUSE,
-                u: {
-                    let mi = MOUSEINPUT {
+            } => {
+                unsafe {
+                    *u.mi_mut() = MOUSEINPUT {
                         dx: 0,
                         dy: delta,
                         mouseData: 0,
@@ -68,40 +57,89 @@ impl Event {
                         time: 0,
                         dwExtraInfo: 0,
                     };
+                }
 
+                winuser::INPUT_MOUSE
+            }
+            Event::Key { direction, kind } => match kind {
+                KeyKind::Button(Button::Left) => {
                     unsafe {
-                        let mut u: INPUT_u = std::mem::zeroed();
-                        *u.mi_mut() = mi;
-
-                        u
+                        *u.mi_mut() = MOUSEINPUT {
+                            dx: 0,
+                            dy: 0,
+                            mouseData: 0,
+                            dwFlags: match direction {
+                                Direction::Up => winuser::MOUSEEVENTF_LEFTUP,
+                                Direction::Down => winuser::MOUSEEVENTF_LEFTDOWN,
+                            },
+                            time: 0,
+                            dwExtraInfo: 0,
+                        };
                     }
-                },
-            },
-            Event::Key { direction, kind } => INPUT {
-                type_: winuser::INPUT_KEYBOARD,
-                u: {
-                    let ki = KEYBDINPUT {
-                        wVk: kind.to_raw()?,
-                        wScan: 0,
-                        dwFlags: if direction == Direction::Up {
-                            winuser::KEYEVENTF_KEYUP
-                        } else {
-                            0
-                        },
-                        time: 0,
-                        dwExtraInfo: 0,
-                    };
 
+                    winuser::INPUT_MOUSE
+                }
+                KeyKind::Button(Button::Right) => {
                     unsafe {
-                        let mut u: INPUT_u = std::mem::zeroed();
-                        *u.ki_mut() = ki;
-
-                        u
+                        *u.mi_mut() = MOUSEINPUT {
+                            dx: 0,
+                            dy: 0,
+                            mouseData: 0,
+                            dwFlags: match direction {
+                                Direction::Up => winuser::MOUSEEVENTF_RIGHTUP,
+                                Direction::Down => winuser::MOUSEEVENTF_RIGHTDOWN,
+                            },
+                            time: 0,
+                            dwExtraInfo: 0,
+                        };
                     }
-                },
+
+                    winuser::INPUT_MOUSE
+                }
+                KeyKind::Button(Button::Middle) => {
+                    unsafe {
+                        *u.mi_mut() = MOUSEINPUT {
+                            dx: 0,
+                            dy: 0,
+                            mouseData: 0,
+                            dwFlags: match direction {
+                                Direction::Up => winuser::MOUSEEVENTF_MIDDLEUP,
+                                Direction::Down => winuser::MOUSEEVENTF_MIDDLEDOWN,
+                            },
+                            time: 0,
+                            dwExtraInfo: 0,
+                        };
+                    }
+
+                    winuser::INPUT_MOUSE
+                }
+                KeyKind::Key(key) => {
+                    let (code, extended) = key.to_raw()?;
+                    unsafe {
+                        *u.ki_mut() = KEYBDINPUT {
+                            wVk: 0,
+                            wScan: code,
+                            dwFlags: winuser::KEYEVENTF_SCANCODE
+                                | if extended {
+                                    winuser::KEYEVENTF_EXTENDEDKEY
+                                } else {
+                                    0
+                                }
+                                | match direction {
+                                    Direction::Up => winuser::KEYEVENTF_KEYUP,
+                                    Direction::Down => 0,
+                                },
+                            time: 0,
+                            dwExtraInfo: 0,
+                        };
+                    }
+
+                    winuser::INPUT_KEYBOARD
+                }
+                KeyKind::Button(_) => return None,
             },
         };
 
-        Some(event)
+        Some(INPUT { type_, u })
     }
 }

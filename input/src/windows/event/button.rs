@@ -6,9 +6,6 @@ impl Button {
         use Button::*;
 
         let code = match *self {
-            Left => winuser::VK_LBUTTON,
-            Right => winuser::VK_RBUTTON,
-            Middle => winuser::VK_MBUTTON,
             X => winuser::VK_XBUTTON1,
             Y => winuser::VK_XBUTTON2, // TODO: Check for correctness.
             _ => return None,

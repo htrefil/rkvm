@@ -30,12 +30,3 @@ pub enum KeyKind {
     Key(Key),
     Button(Button),
 }
-
-impl KeyKind {
-    pub(crate) fn to_raw(&self) -> Option<u16> {
-        match self {
-            KeyKind::Key(key) => key.to_raw(),
-            KeyKind::Button(button) => button.to_raw(),
-        }
-    }
-}
