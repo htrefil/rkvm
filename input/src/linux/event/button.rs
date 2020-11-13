@@ -1,10 +1,10 @@
 use crate::event::Button;
 
 impl Button {
-    pub(crate) fn to_raw(&self) -> Option<u16> {
+    pub(crate) fn to_raw(&self) -> u16 {
         use Button::*;
 
-        let code = match *self {
+        match *self {
             A => 0x0130,
             B => 0x0131,
             Back => 0x0116,
@@ -124,9 +124,7 @@ impl Button {
             X => 0x0130,
             Y => 0x0150,
             Z => 0x0135,
-        };
-
-        Some(code)
+        }
     }
 
     pub(crate) fn from_raw(code: u16) -> Option<Self> {

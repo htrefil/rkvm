@@ -1,10 +1,10 @@
 use crate::event::Key;
 
 impl Key {
-    pub(crate) fn to_raw(&self) -> Option<u16> {
+    pub(crate) fn to_raw(&self) -> u16 {
         use Key::*;
 
-        let code = match *self {
+        match *self {
             A => 0x001E,
             Ab => 0x0196,
             AddressBook => 0x01AD,
@@ -493,9 +493,7 @@ impl Key {
             ZoomIn => 0x01A2,
             ZoomOut => 0x01A3,
             ZoomReset => 0x01A4,
-        };
-
-        Some(code)
+        }
     }
 
     pub(crate) fn from_raw(code: u16) -> Option<Self> {

@@ -48,14 +48,10 @@ impl EventWriter {
     }
 
     pub async fn write(&mut self, event: Event) -> Result<(), Error> {
-        if let Some(event) = event.to_raw() {
-            return self.write_raw(event).await;
-        }
-
-        Ok(())
+        self.write_raw(event.to_raw())
     }
 
-    pub(crate) async fn write_raw(&mut self, event: input_event) -> Result<(), Error> {
+    pub(crate) fn write_raw(&mut self, event: input_event) -> Result<(), Error> {
         // As far as tokio is concerned, the FD never becomes ready for writing, so just write it normally.
         // If an error happens, it will be propagated to caller and the FD is opened in nonblocking mode anyway,
         // so it shouldn't be an issue.

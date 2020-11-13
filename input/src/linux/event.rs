@@ -5,7 +5,7 @@ use crate::event::{Axis, Button, Direction, Event, Key, KeyKind};
 use crate::linux::glue::{self, input_event, timeval};
 
 impl Event {
-    pub(crate) fn to_raw(&self) -> Option<input_event> {
+    pub(crate) fn to_raw(&self) -> input_event {
         let (type_, code, value) = match *self {
             Event::MouseScroll { delta } => (glue::EV_REL as _, glue::REL_WHEEL as _, delta),
             Event::MouseMove {
@@ -19,14 +19,14 @@ impl Event {
             Event::Key {
                 direction: Direction::Up,
                 kind,
-            } => (glue::EV_KEY as _, kind.to_raw()?, 0),
+            } => (glue::EV_KEY as _, kind.to_raw(), 0),
             Event::Key {
                 direction: Direction::Down,
                 kind,
-            } => (glue::EV_KEY as _, kind.to_raw()?, 1),
+            } => (glue::EV_KEY as _, kind.to_raw(), 1),
         };
 
-        Some(input_event {
+        input_event {
             type_,
             code,
             value,
@@ -34,7 +34,7 @@ impl Event {
                 tv_sec: 0,
                 tv_usec: 0,
             },
-        })
+        }
     }
 
     pub(crate) fn from_raw(raw: input_event) -> Option<Self> {
@@ -70,7 +70,7 @@ impl KeyKind {
             .or_else(|| Button::from_raw(code).map(KeyKind::Button))
     }
 
-    pub(crate) fn to_raw(&self) -> Option<u16> {
+    pub(crate) fn to_raw(&self) -> u16 {
         match self {
             KeyKind::Key(key) => key.to_raw(),
             KeyKind::Button(button) => button.to_raw(),
