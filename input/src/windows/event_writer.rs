@@ -10,16 +10,20 @@ impl EventWriter {
     }
 
     pub async fn write(&mut self, event: Event) -> Result<(), Error> {
-        if let Some(event) = event.to_raw() {
-            return self.write_raw(event).await;
+        if let Some(mut events) = event.to_raw() {
+            return self.write_raw(events.as_mut_slice());
         }
 
         Ok(())
     }
 
-    async fn write_raw(&mut self, mut event: INPUT) -> Result<(), Error> {
+    fn write_raw(&mut self, events: &mut [INPUT]) -> Result<(), Error> {
         let written = unsafe {
-            winuser::SendInput(1, &mut event as *mut _, std::mem::size_of_val(&event) as _)
+            winuser::SendInput(
+                events.len() as _,
+                events.as_mut_ptr(),
+                std::mem::size_of_val(&events[0]) as _,
+            )
         };
 
         if written != 1 {

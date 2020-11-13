@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Copy, Debug, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Button {
     A,
     B,
@@ -122,19 +121,4 @@ pub enum Button {
     X,
     Y,
     Z,
-}
-
-impl PartialEq for Button {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_raw() == other.to_raw()
-    }
-}
-
-impl Hash for Button {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
-        self.to_raw().hash(state)
-    }
 }

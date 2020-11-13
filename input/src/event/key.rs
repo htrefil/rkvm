@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Copy, Debug, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Key {
     A,
     Ab,
@@ -491,19 +490,4 @@ pub enum Key {
     ZoomIn,
     ZoomOut,
     ZoomReset,
-}
-
-impl PartialEq for Key {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_raw() == other.to_raw()
-    }
-}
-
-impl Hash for Key {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
-        self.to_raw().hash(state)
-    }
 }
