@@ -48,7 +48,11 @@ impl EventWriter {
     }
 
     pub async fn write(&mut self, event: Event) -> Result<(), Error> {
-        self.write_raw(event.to_raw()).await
+        if let Some(event) = event.to_raw() {
+            return self.write_raw(event).await;
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn write_raw(&mut self, event: input_event) -> Result<(), Error> {

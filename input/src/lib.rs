@@ -1,10 +1,21 @@
+#[cfg(target_os = "linux")]
 mod device_id;
+
 mod event;
-mod event_manager;
-mod event_reader;
-mod event_writer;
+
+#[cfg(target_os = "linux")]
 mod glue;
 
+#[cfg(target_os = "linux")]
+mod linux;
+
+#[cfg(target_os = "windows")]
+mod windows;
+
+#[cfg(target_os = "linux")]
+pub use linux::{EventManager, EventWriter};
+
+#[cfg(target_os = "windows")]
+pub use windows::{EventManager, EventWriter};
+
 pub use event::{Axis, Button, Direction, Event, Key, KeyKind};
-pub use event_manager::EventManager;
-pub use event_writer::EventWriter;
