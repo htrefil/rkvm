@@ -158,9 +158,14 @@ async fn run(
 #[derive(StructOpt)]
 #[structopt(name = "rkvm-server", about = "The rkvm server application")]
 struct Args {
-    #[structopt(
-        help = "Path to configuration file",
-        default_value = "/etc/rkvm/server.toml"
+    #[structopt(help = "Path to configuration file")]
+    #[cfg_attr(
+        target_os = "linux",
+        structopt(default_value = "/etc/rkvm/server.toml")
+    )]
+    #[cfg_attr(
+        target_os = "windows",
+        structopt(default_value = "C:/rkvm/server.toml")
     )]
     config_path: PathBuf,
 }

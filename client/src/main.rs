@@ -64,9 +64,14 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
 #[derive(StructOpt)]
 #[structopt(name = "rkvm-client", about = "The rkvm client application")]
 struct Args {
-    #[structopt(
-        help = "Path to configuration file",
-        default_value = "/etc/rkvm/client.toml"
+    #[structopt(help = "Path to configuration file")]
+    #[cfg_attr(
+        target_os = "linux",
+        structopt(default_value = "/etc/rkvm/client.toml")
+    )]
+    #[cfg_attr(
+        target_os = "windows",
+        structopt(default_value = "C:/rkvm/client.toml")
     )]
     config_path: PathBuf,
 }
