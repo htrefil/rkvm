@@ -1,5 +1,5 @@
 # rkvm
-rkvm is a tool for sharing keyboard and mouse across multiple Linux computers.
+rkvm is a tool for sharing keyboard and mouse across multiple Linux and Windows machines.
 It is based on a client/server architecture, where server is the machine controlling mouse and keyboard and relays events (mouse move, key presses, ...) to clients.
 
 Switching between different clients is done by a configurable keyboard shortcut.
@@ -10,9 +10,11 @@ Switching between different clients is done by a configurable keyboard shortcut.
 - Low overhead
 
 ## Requirements
+- Rust 1.48 and higher
+
+## Linux requirements
 - The uinput Linux kernel module, enabled by default in most distros
 - libevdev
-- Rust 1.48 and higher
 
 ## Building
 Run `cargo build --release`. 
@@ -24,9 +26,9 @@ Run `cargo run certificate-gen -- --help` to see and usage.
 
 ## Setting up
 First, build the project and generate certificates. Client accepts certificates both in PEM and DER formats.
-You either need to run either of the programs as root or make `/dev/uinput` accessible by the user it runs as.
+On Linux, you either need to run either of the programs as root or make `/dev/uinput` accessible by the user it runs as.
 
-By default, the programs reads their config files from /etc/rkvm/{server,client}.toml, this can be changed by passing the path as the first command line parameter.
+By default, the programs reads their config files from /etc/rkvm/{server,client}.toml on Linux and C:/rkvm/{server,client}.toml on Windows, this can be changed by passing the path as the first command line parameter.
 
 The [example](example) directory contains example configurations and systemd service files.
 
@@ -39,7 +41,7 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 
 ## Limitations
 - Only keyboard and relative mouse events work (that is, can be forwarded to clients)
-- No Windows or macOS support
+- Clients only are supported on Windows, however, server support will be added in the future
 
 ## Project structure
 - `server` - server application code
