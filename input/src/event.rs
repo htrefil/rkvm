@@ -25,7 +25,7 @@ pub enum Direction {
     Down, // The key is pressed.
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum KeyKind {
     Key(Key),
     Button(Button),
