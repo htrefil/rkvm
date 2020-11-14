@@ -1,6 +1,6 @@
 [package]
 name = "net"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
 edition = "2018"
 
