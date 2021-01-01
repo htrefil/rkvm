@@ -10,4 +10,4 @@ edition = "2018"
 input = { path = "../input" }
 serde = { version = "1.0.117", features = ["derive"] }
 bincode = "1.3.1"
-tokio = { version = "0.3.2", features = ["io-util"] }
+tokio = { version = "1.0.1", features = ["io-util"] }
