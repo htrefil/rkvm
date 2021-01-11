@@ -2,7 +2,7 @@ use crate::event::Event;
 use crate::linux::device_id;
 use crate::linux::glue::{self, libevdev, libevdev_uinput};
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::mem::MaybeUninit;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsRawFd;
@@ -96,7 +96,7 @@ impl EventReader {
 
     pub async fn read(&mut self) -> Result<Event, Error> {
         loop {
-            let result = self.file.readable().await?.with_io(|| {
+            let result = self.file.readable().await?.try_io(|_| {
                 let mut event = MaybeUninit::uninit();
                 let ret = unsafe {
                     glue::libevdev_next_event(
@@ -115,9 +115,9 @@ impl EventReader {
             });
 
             let event = match result {
-                Ok(event) => event,
-                Err(ref err) if err.kind() == ErrorKind::WouldBlock => continue,
-                Err(err) => return Err(err),
+                Ok(Ok(event)) => event,
+                Ok(Err(err)) => return Err(err),
+                Err(_) => continue, // This means it would block.
             };
 
             if let Some(event) = Event::from_raw(event) {
