@@ -403,6 +403,7 @@ dependencies = [
  "futures",
  "inotify",
  "libc",
+ "pkg-config",
  "serde",
  "tokio",
  "winapi",
