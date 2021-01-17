@@ -22,7 +22,7 @@ Note that you need to have libevdev installed on your system, otherwise the buil
 
 ## Generating certificates
 The repo contains a simple Rust program, `certificate-gen`, to aid certificate generation. 
-Run `cargo run certificate-gen -- --help` to see and usage.
+Run `cargo run --bin certificate-gen -- --help` to see and usage.
 
 ## Setting up
 First, build the project and generate certificates. Client accepts certificates both in PEM and DER formats.
