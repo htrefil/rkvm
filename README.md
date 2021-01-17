@@ -5,7 +5,7 @@ It is based on a client/server architecture, where server is the machine control
 Switching between different clients is done by a configurable keyboard shortcut.
 
 ## Features
-- TLS encrypted by default, backed by OpenSSL
+- TLS encrypted by default, backed by OpenSSL on Linux and SChannel on Windows (should be already installed on your machine by default)
 - Display server agnostic
 - Low overhead
 
@@ -15,6 +15,7 @@ Switching between different clients is done by a configurable keyboard shortcut.
 ## Linux requirements
 - The uinput Linux kernel module, enabled by default in most distros
 - libevdev
+- OpenSSL
 
 ## Building
 Run `cargo build --release`. 
