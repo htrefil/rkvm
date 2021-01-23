@@ -115,6 +115,7 @@ async fn run(
         .copied()
         .map(|key| (key, false))
         .collect();
+    let mut already_switched = false;
     loop {
         tokio::select! {
             event = manager.read() => {
@@ -122,14 +123,12 @@ async fn run(
                 if let Event::Key { direction, kind: KeyKind::Key(key) } = event {
                     if let Some(state) = key_states.get_mut(&key) {
                         *state = direction == Direction::Down;
+                        already_switched = false;
                     }
                 }
 
-                // TODO: This won't work with multiple keys.
-                if key_states.iter().filter(|(_, state)| **state).count() == key_states.len() {
-                    for state in key_states.values_mut() {
-                        *state = false;
-                    }
+                if !already_switched && key_states.iter().filter(|(_, state)| **state).count() == key_states.len() {
+                    already_switched = true;
 
                     current = (current + 1) % (clients.len() + 1);
                     log::info!("Switching to client {}", current);
