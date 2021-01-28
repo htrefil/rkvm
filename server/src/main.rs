@@ -119,15 +119,32 @@ async fn run(
         tokio::select! {
             event = manager.read() => {
                 let event = event?;
+                let mut last_pressed_key = None;
                 if let Event::Key { direction, kind: KeyKind::Key(key) } = event {
                     if let Some(state) = key_states.get_mut(&key) {
                         *state = direction == Direction::Down;
+                        last_pressed_key = Some(key);
                     }
                 }
 
-                // TODO: This won't work with multiple keys.
                 if key_states.iter().filter(|(_, state)| **state).count() == key_states.len() {
-                    for state in key_states.values_mut() {
+                    for (key, state) in key_states.iter_mut() {
+                        // Release all currently pressed keys from combo
+                        // NOTE: This will NOT release other keys that are not part of the combo
+                        if Some(*key) != last_pressed_key {
+                            let event = Event::Key{
+                                direction: Direction::Up,
+                                kind: KeyKind::Key(*key),
+                            };
+                            if current == 0 {
+                                manager.write(event).await?;
+                            }else {
+                                let idx = current - 1;
+                                // We cannot remove broken client here, to not crash in next iteration,
+                                // and it will be removed later one anyways, therefore we just ignore error here
+                                let _ = clients[idx].send(event);
+                            }
+                        }
                         *state = false;
                     }
 
