@@ -16,6 +16,7 @@ Switching between different clients is done by a configurable keyboard shortcut.
 - The uinput Linux kernel module, enabled by default in most distros
 - libevdev development files (`sudo apt install libevdev-dev` on Debian/Ubuntu)
 - OpenSSL
+- Clang/LLVM (`sudo apt install clang` on Debian/Ubuntu)
 
 ## Building
 Run `cargo build --release`. 
