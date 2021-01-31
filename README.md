@@ -14,7 +14,7 @@ Switching between different clients is done by a configurable keyboard shortcut.
 
 ## Linux requirements
 - The uinput Linux kernel module, enabled by default in most distros
-- libevdev
+- libevdev development files (`sudo apt install libevdev-dev` on Debian/Ubuntu)
 - OpenSSL
 
 ## Building
