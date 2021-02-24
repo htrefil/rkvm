@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot::{self, Receiver};
 use tokio::time;
-use winapi::um::winuser::{self, INPUT};
+use winapi::um::winuser::{self, DESKTOP_JOURNALPLAYBACK, INPUT};
 
 pub struct EventWriter {
     event_sender: UnboundedSender<Event>,
@@ -98,8 +98,40 @@ fn write_raw(events: &mut [INPUT]) -> Result<(), Error> {
         )
     };
 
-    if written != 1 {
-        return Err(Error::last_os_error());
+    if written == 0 {
+        let original = unsafe {
+            winuser::GetThreadDesktop(winapi::um::processthreadsapi::GetCurrentThreadId())
+        };
+        if original.is_null() {
+            return Err(Error::last_os_error());
+        }
+
+        let other =
+            unsafe { winuser::OpenInputDesktop(0 as _, 0 as _, DESKTOP_JOURNALPLAYBACK as _) };
+        if other.is_null() {
+            return Err(Error::last_os_error());
+        }
+        if unsafe { winuser::SetThreadDesktop(other) } == 0 {
+            return Err(Error::last_os_error());
+        }
+
+        let written = unsafe {
+            winuser::SendInput(
+                events.len() as _,
+                events.as_mut_ptr(),
+                std::mem::size_of_val(&events[0]) as _,
+            )
+        };
+        if written == 0 {
+            return Err(Error::last_os_error());
+        }
+
+        if unsafe { winuser::SetThreadDesktop(original) } == 0 {
+            return Err(Error::last_os_error());
+        }
+        if unsafe { winuser::CloseDesktop(other) } == 0 {
+            return Err(Error::last_os_error());
+        }
     }
 
     Ok(())
