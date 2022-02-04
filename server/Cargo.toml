@@ -19,3 +19,12 @@ log = "0.4.11"
 env_logger = "0.8.1"
 tokio-native-tls = "0.3.0"
 anyhow = "1.0.33"
+
+[package.metadata.rpm]
+package = "server"
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+server = { path = "/usr/bin/rkvm-server" }

@@ -27,4 +27,4 @@ package = "client"
 buildflags = ["--release"]
 
 [package.metadata.rpm.targets]
-client = { path = "/usr/bin/client" }
+client = { path = "/usr/bin/rkvm-client" }
