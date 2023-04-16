@@ -46,15 +46,21 @@ impl EventReader {
         };
 
         // Check if we're not opening our own virtual device.
-        if vendor == device_id::VENDOR as _
+        let vendor = vendor == device_id::VENDOR as _
             && product == device_id::PRODUCT as _
-            && version == device_id::VERSION as _
-        {
+            && version == device_id::VERSION as _;
+        // "Upon binding to a device or resuming from suspend, a driver must report
+        // the current switch state. This ensures that the device, kernel, and userspace
+        // state is in sync."
+        // We have no way of knowing that.
+        let has_sw = unsafe { glue::libevdev_has_event_type(evdev, glue::EV_SW) == 1 };
+
+        if vendor || has_sw {
             unsafe {
                 glue::libevdev_free(evdev);
             }
 
-            return Err(OpenError::AlreadyOpened);
+            return Err(OpenError::NotAppliable);
         }
 
         unsafe {
@@ -153,7 +159,7 @@ impl Drop for EventReader {
 unsafe impl Send for EventReader {}
 
 pub enum OpenError {
-    AlreadyOpened,
+    NotAppliable,
     Io(Error),
 }
 

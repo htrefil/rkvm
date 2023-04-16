@@ -94,7 +94,7 @@ async fn spawn_reader(
     let reader = match EventReader::open(&path).await {
         Ok(reader) => reader,
         Err(OpenError::Io(err)) => return Err(err),
-        Err(OpenError::AlreadyOpened) => return Ok(()),
+        Err(OpenError::NotAppliable) => return Ok(()),
     };
 
     tokio::spawn(handle_events(reader, sender));
