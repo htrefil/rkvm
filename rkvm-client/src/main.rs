@@ -8,7 +8,7 @@ use rkvm_net::{self, Message, PROTOCOL_VERSION};
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::process;
-use structopt::StructOpt;
+use clap::Parser;
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio::net::TcpStream;
@@ -61,18 +61,10 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
     }
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 #[structopt(name = "rkvm-client", about = "The rkvm client application")]
 struct Args {
-    #[structopt(help = "Path to configuration file")]
-    #[cfg_attr(
-        target_os = "linux",
-        structopt(default_value = "/etc/rkvm/client.toml")
-    )]
-    #[cfg_attr(
-        target_os = "windows",
-        structopt(default_value = "C:/rkvm/client.toml")
-    )]
+    #[clap(help = "Path to configuration file")]
     config_path: PathBuf,
 }
 
@@ -83,7 +75,7 @@ async fn main() {
         .filter(None, LevelFilter::Info)
         .init();
 
-    let args = Args::from_args();
+    let args = Args::parse();
     let config = match fs::read_to_string(&args.config_path).await {
         Ok(config) => config,
         Err(err) => {
