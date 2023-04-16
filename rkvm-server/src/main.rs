@@ -152,7 +152,7 @@ async fn run(listen: SocketAddr, acceptor: TlsAcceptor, switch_key: Key) -> Resu
                     }
                 }
 
-                if current != 0 && clients[current].send(event).await.is_err() {
+                if current == 0 || clients[current].send(event).await.is_err() {
                     current = 0;
                     manager.write(event).await?;
                 }
