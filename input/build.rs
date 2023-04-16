@@ -13,7 +13,7 @@ fn main() {
     println!("cargo:rerun-if-changed=glue/glue.h");
 
     let library = Config::new()
-        .atleast_version("1.9.1")
+        .atleast_version("1.9.0")
         .probe("libevdev")
         .unwrap();
     let args = library

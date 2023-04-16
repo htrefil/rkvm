@@ -1,6 +1,5 @@
 [package]
-name = "client"
-description = "A tool for sharing keyboard and mouse across multiple Linux and Windows machines, the client"
+name = "rkvm-client"
 license = "MIT"
 version = "0.2.0"
 authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
@@ -21,7 +20,7 @@ tokio-native-tls = "0.3.0"
 anyhow = "1.0.33"
 
 [package.metadata.rpm]
-package = "client"
+package = "rkvm-client"
 
 [package.metadata.rpm.cargo]
 buildflags = ["--release"]
