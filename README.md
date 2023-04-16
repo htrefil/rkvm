@@ -86,6 +86,7 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 ## Limitations
 - Only keyboard and relative mouse events work (that is, can be forwarded to clients)
 - Clients only are supported on Windows, however, server support will be added in the future
+- When Windows UAC is active the client needs elevated privileges to function properly. You may need to run the client in the System account (e.g. `psexec -sid client ...`)
 
 ## Project structure
 - `server` - server application code
