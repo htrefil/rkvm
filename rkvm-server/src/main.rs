@@ -1,159 +1,22 @@
 mod config;
+mod tls;
 
-use anyhow::{Context, Error};
-use config::Config;
-use rkvm_input::{Direction, Event, EventManager, Key, KeyKind};
-use log::LevelFilter;
-use rkvm_net::{self, Message, PROTOCOL_VERSION};
-use std::collections::{HashMap, HashSet};
-use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::process;
 use clap::Parser;
+use config::Config;
+use log::LevelFilter;
+use rkvm_input::{Direction, Event, EventManager, Key, KeyKind};
+use rkvm_net::{self, Message};
+use slab::Slab;
+use std::io::{Error, ErrorKind};
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::process::ExitCode;
 use tokio::fs;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncWriteExt, BufStream};
 use tokio::net::TcpListener;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio::time;
-use tokio_native_tls::native_tls::{Identity, TlsAcceptor};
-
-async fn handle_connection<T>(
-    mut stream: T,
-    mut receiver: UnboundedReceiver<Event>,
-) -> Result<(), Error>
-where
-    T: AsyncRead + AsyncWrite + Unpin,
-{
-    rkvm_net::write_version(&mut stream, PROTOCOL_VERSION).await?;
-
-    let version = rkvm_net::read_version(&mut stream).await?;
-    if version != PROTOCOL_VERSION {
-        return Err(anyhow::anyhow!(
-            "Incompatible protocol version (got {}, expecting {})",
-            version,
-            PROTOCOL_VERSION
-        ));
-    }
-
-    loop {
-        // Send a keep alive message in intervals of half of the timeout just to be on the safe side.
-        let message = match time::timeout(rkvm_net::MESSAGE_TIMEOUT / 2, receiver.recv()).await {
-            Ok(Some(message)) => Message::Event(message),
-            Ok(None) => return Ok(()),
-            Err(_) => Message::KeepAlive,
-        };
-
-        time::timeout(
-            rkvm_net::MESSAGE_TIMEOUT,
-            rkvm_net::write_message(&mut stream, &message),
-        )
-        .await
-        .context("Write timeout")??;
-    }
-}
-
-async fn run(
-    listen_address: SocketAddr,
-    switch_keys: &HashSet<Key>,
-    identity_path: &Path,
-    identity_password: &str,
-) -> Result<Infallible, Error> {
-    let identity = fs::read(identity_path)
-        .await
-        .context("Failed to read identity")?;
-    let identity =
-        Identity::from_pkcs12(&identity, identity_password).context("Failed to parse identity")?;
-    let acceptor: tokio_native_tls::TlsAcceptor = TlsAcceptor::new(identity)
-        .context("Failed to create TLS acceptor")
-        .map(Into::into)?;
-    let listener = TcpListener::bind(listen_address).await?;
-
-    log::info!("Listening on {}", listen_address);
-
-    let (client_sender, mut client_receiver) = mpsc::unbounded_channel();
-    tokio::spawn(async move {
-        loop {
-            let (stream, address) = match listener.accept().await {
-                Ok(sa) => sa,
-                Err(err) => {
-                    let _ = client_sender.send(Err(err));
-                    return;
-                }
-            };
-
-            let stream = match acceptor.accept(stream).await {
-                Ok(stream) => stream,
-                Err(err) => {
-                    log::error!("{}: TLS error: {}", address, err);
-                    continue;
-                }
-            };
-
-            let (sender, receiver) = mpsc::unbounded_channel();
-            if client_sender.send(Ok(sender)).is_err() {
-                return;
-            }
-
-            tokio::spawn(async move {
-                log::info!("{}: connected", address);
-                let message = handle_connection(stream, receiver)
-                    .await
-                    .err()
-                    .map(|err| format!(" ({})", err))
-                    .unwrap_or_else(String::new);
-                log::info!("{}: disconnected{}", address, message);
-            });
-        }
-    });
-
-    let mut clients: Vec<UnboundedSender<Event>> = Vec::new();
-    let mut current = 0;
-    let mut manager = EventManager::new().await?;
-    let mut key_states: HashMap<_, _> = switch_keys
-        .iter()
-        .copied()
-        .map(|key| (key, false))
-        .collect();
-    loop {
-        tokio::select! {
-            event = manager.read() => {
-                let event = event?;
-                if let Event::Key { direction, kind: KeyKind::Key(key) } = event {
-                    if let Some(state) = key_states.get_mut(&key) {
-                        *state = direction == Direction::Down;
-                    }
-                }
-
-                // TODO: This won't work with multiple keys.
-                if key_states.iter().filter(|(_, state)| **state).count() == key_states.len() {
-                    for state in key_states.values_mut() {
-                        *state = false;
-                    }
-
-                    current = (current + 1) % (clients.len() + 1);
-                    log::info!("Switching to client {}", current);
-                    continue;
-                }
-
-                if current != 0 {
-                    let idx = current - 1;
-                    if clients[idx].send(event).is_ok() {
-                        continue;
-                    }
-
-                    clients.remove(idx);
-                    current = 0;
-                }
-
-                manager.write(event).await?;
-            }
-            sender = client_receiver.recv() => {
-                clients.push(sender.unwrap()?);
-            }
-        }
-    }
-}
+use tokio::signal;
+use tokio::sync::mpsc::{self, Sender};
+use tokio_rustls::TlsAcceptor;
 
 #[derive(Parser)]
 #[structopt(name = "rkvm-server", about = "The rkvm server application")]
@@ -163,43 +26,138 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     env_logger::builder()
         .format_timestamp(None)
         .filter(None, LevelFilter::Info)
+        .parse_default_env()
         .init();
 
     let args = Args::parse();
     let config = match fs::read_to_string(&args.config_path).await {
         Ok(config) => config,
         Err(err) => {
-            log::error!("Error loading config: {}", err);
-            process::exit(1);
+            log::error!("Error reading config: {}", err);
+            return ExitCode::FAILURE;
         }
     };
 
-    let config: Config = match toml::from_str(&config) {
+    let config = match toml::from_str::<Config>(&config) {
         Ok(config) => config,
         Err(err) => {
             log::error!("Error parsing config: {}", err);
-            process::exit(1);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let acceptor = match tls::configure(&config.certificate, &config.key).await {
+        Ok(acceptor) => acceptor,
+        Err(err) => {
+            log::error!("Error configuring TLS: {}", err);
+            return ExitCode::FAILURE;
         }
     };
 
     tokio::select! {
-        result = run(config.listen_address, &config.switch_keys, &config.identity_path, &config.identity_password) => {
+        result = run(config.listen, acceptor, config.switch_key) => {
             if let Err(err) = result {
-                log::error!("Error: {:#}", err);
-                process::exit(1);
+                log::error!("Error running server: {}", err);
+                return ExitCode::FAILURE;
             }
         }
-        result = tokio::signal::ctrl_c() => {
+        // This is needed to properly clean evdev stuff up.
+        result = signal::ctrl_c() => {
             if let Err(err) = result {
                 log::error!("Error setting up signal handler: {}", err);
-                process::exit(1);
+                return ExitCode::FAILURE;
             }
 
             log::info!("Exiting on signal");
+        }
+    }
+
+    ExitCode::SUCCESS
+}
+
+async fn run(listen: SocketAddr, acceptor: TlsAcceptor, switch_key: Key) -> Result<(), Error> {
+    let listener = TcpListener::bind(&listen).await?;
+    log::info!("Listening on {}", listen);
+
+    let mut clients = Slab::<Sender<_>>::new();
+    let mut current = 0;
+    let mut manager = EventManager::new().await?;
+
+    loop {
+        tokio::select! {
+            result = listener.accept() => {
+                // Remove dead clients.
+                clients.retain(|_, client| !client.is_closed());
+                if !clients.contains(current) {
+                    current = 0;
+                }
+
+                let (stream, addr) = result?;
+                let acceptor = acceptor.clone();
+
+                let (sender, mut receiver) = mpsc::channel::<Event>(1);
+                clients.insert(sender);
+
+                tokio::spawn(async move {
+                    let stream = match acceptor.accept(stream).await {
+                        Ok(stream) => stream,
+                        Err(err) => {
+                            log::error!("{}: TLS accept error: {}", addr, err);
+                            return;
+                        }
+                    };
+
+                    log::info!("{}: Connected", addr);
+
+                    let result = async {
+                        let mut stream = BufStream::with_capacity(1024, 1024, stream);
+
+                        rkvm_net::write_version(&mut stream, rkvm_net::PROTOCOL_VERSION).await?;
+                        stream.flush().await?;
+
+                        let version = rkvm_net::read_version(&mut stream).await?;
+                        if version != rkvm_net::PROTOCOL_VERSION {
+                            return Err(Error::new(ErrorKind::InvalidData, "Invalid client protocol version"));
+                        }
+
+                        loop {
+                            let event = match receiver.recv().await {
+                                Some(event) => event,
+                                None => break,
+                            };
+
+                            rkvm_net::write_message(&mut stream, &Message::Event(event)).await?;
+                            stream.flush().await?;
+                        }
+
+                        Ok::<_, Error>(())
+                    }
+                    .await;
+
+                    match result {
+                        Ok(()) => log::info!("{}: Disconnected", addr),
+                        Err(err) => log::error!("{}: Disconnected: {}", addr, err),
+                    }
+                });
+            }
+            result = manager.read() => {
+                let event = result?;
+                if let Event::Key { direction: Direction::Down, kind: KeyKind::Key(key) } = event {
+                    if key == switch_key {
+                        current = (current + 1) % (clients.len() + 1);
+                        log::info!("Switching to client {}", current);
+                    }
+                }
+
+                if current != 0 && clients[current].send(event).await.is_err() {
+                    current = 0;
+                    manager.write(event).await?;
+                }
+            }
         }
     }
 }

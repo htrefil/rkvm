@@ -6,8 +6,7 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 // Is it bold to assume there won't be more than 65536 protocol versions?
-pub const PROTOCOL_VERSION: u16 = 1;
-pub const MESSAGE_TIMEOUT: Duration = Duration::from_secs(5);
+pub const PROTOCOL_VERSION: u16 = 2;
 
 pub async fn read_version<R>(mut reader: R) -> Result<u16, Error>
 where
