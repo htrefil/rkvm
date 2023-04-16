@@ -10,7 +10,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process;
-use structopt::StructOpt;
+use clap::Parser;
 use tokio::fs;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
@@ -155,18 +155,10 @@ async fn run(
     }
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 #[structopt(name = "rkvm-server", about = "The rkvm server application")]
 struct Args {
     #[structopt(help = "Path to configuration file")]
-    #[cfg_attr(
-        target_os = "linux",
-        structopt(default_value = "/etc/rkvm/server.toml")
-    )]
-    #[cfg_attr(
-        target_os = "windows",
-        structopt(default_value = "C:/rkvm/server.toml")
-    )]
     config_path: PathBuf,
 }
 
@@ -177,7 +169,7 @@ async fn main() {
         .filter(None, LevelFilter::Info)
         .init();
 
-    let args = Args::from_args();
+    let args = Args::parse();
     let config = match fs::read_to_string(&args.config_path).await {
         Ok(config) => config,
         Err(err) => {

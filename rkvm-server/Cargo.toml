@@ -13,11 +13,11 @@ rkvm-input = { path = "../rkvm-input" }
 rkvm-net = { path = "../rkvm-net" }
 serde = { version = "1.0.117", features = ["derive"] }
 toml = "0.5.7"
-structopt = "0.3.20"
 log = "0.4.11"
 env_logger = "0.8.1"
 tokio-native-tls = "0.3.0"
 anyhow = "1.0.33"
+clap = { version = "4.2.2", features = ["derive"] }
 
 [package.metadata.rpm]
 package = "rkvm-server"

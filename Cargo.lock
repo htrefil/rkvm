@@ -829,12 +829,12 @@ name = "rkvm-server"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "clap 4.2.2",
  "env_logger 0.8.4",
  "log",
  "rkvm-input",
  "rkvm-net",
  "serde",
- "structopt",
  "tokio",
  "tokio-native-tls",
  "toml",
