@@ -2,11 +2,11 @@
 name = "rkvm-certificate-gen"
 version = "0.1.0"
 authors = ["htrefil <8711792+htrefil@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-structopt = "0.3.20"
+clap = "4.2.2"
 tempfile = "3.1.0"
-anyhow = "1.0.33"
+thiserror = "1.0.40"
