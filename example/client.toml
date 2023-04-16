@@ -1,2 +1,2 @@
 server = "localhost:5258"
-certificate-path = "certificate.pem"
+certificate = "example/certificate.crt"
