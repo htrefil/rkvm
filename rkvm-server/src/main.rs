@@ -5,8 +5,9 @@ use clap::Parser;
 use config::Config;
 use log::LevelFilter;
 use rkvm_input::{Direction, Event, EventManager, Key, KeyKind};
+use rkvm_net::Message;
 use slab::Slab;
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -115,13 +116,7 @@ async fn run(listen: SocketAddr, acceptor: TlsAcceptor, switch_key: Key) -> Resu
                     let result = async {
                         let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
-                        rkvm_net::write_version(&mut stream, rkvm_net::PROTOCOL_VERSION).await?;
-                        stream.flush().await?;
-
-                        let version = rkvm_net::read_version(&mut stream).await?;
-                        if version != rkvm_net::PROTOCOL_VERSION {
-                            return Err(Error::new(ErrorKind::InvalidData, "Invalid client protocol version"));
-                        }
+                        rkvm_net::negotiate(&mut stream).await?;
 
                         loop {
                             let event = match receiver.recv().await {
@@ -129,7 +124,7 @@ async fn run(listen: SocketAddr, acceptor: TlsAcceptor, switch_key: Key) -> Resu
                                 None => break,
                             };
 
-                            rkvm_net::write_message(&mut stream, &event).await?;
+                            event.encode(&mut stream).await?;
                             stream.flush().await?;
                         }
 

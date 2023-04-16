@@ -5,11 +5,11 @@ use clap::Parser;
 use config::Config;
 use log::LevelFilter;
 use rkvm_input::EventWriter;
-use std::io::{Error, ErrorKind};
+use rkvm_net::Message;
+use std::io::Error;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::signal;
 use tokio_rustls::rustls::ServerName;
@@ -86,20 +86,11 @@ async fn run(hostname: &ServerName, port: u16, connector: TlsConnector) -> Resul
     let mut stream = connector.connect(hostname.clone(), stream).await?;
     log::info!("Connected to server");
 
-    rkvm_net::write_version(&mut stream, rkvm_net::PROTOCOL_VERSION).await?;
-    stream.flush().await?;
-
-    let version = rkvm_net::read_version(&mut stream).await?;
-    if version != rkvm_net::PROTOCOL_VERSION {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            "Invalid server protocol version",
-        ));
-    }
+    rkvm_net::negotiate(&mut stream).await?;
 
     let mut writer = EventWriter::new().await?;
     loop {
-        let event = rkvm_net::read_message(&mut stream).await?;
+        let event = Message::decode(&mut stream).await?;
         writer.write(event).await?;
     }
 }
