@@ -2,16 +2,16 @@ use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Formatter};
 use std::path::PathBuf;
+use tokio_rustls::rustls::ServerName;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub server: Server,
-    pub certificate_path: PathBuf,
+    pub certificate: PathBuf,
 }
-
 pub struct Server {
-    pub hostname: String,
+    pub hostname: ServerName,
     pub port: u16,
 }
 
@@ -37,22 +37,13 @@ impl<'de> Visitor<'de> for ServerVisitor {
     where
         E: de::Error,
     {
-        let err = || E::custom("Invalid server description");
+        let (hostname, port) = data
+            .rsplit_once(':')
+            .ok_or_else(|| E::custom("No port provided"))?;
 
-        let mut split = data.split(':');
-        let hostname = split.next().ok_or_else(err)?;
-        let port = split
-            .next()
-            .and_then(|data| data.parse().ok())
-            .ok_or_else(err)?;
+        let hostname = hostname.try_into().map_err(E::custom)?;
+        let port = port.parse().map_err(E::custom)?;
 
-        if split.next().is_some() {
-            return Err(E::custom("Extraneous data"));
-        }
-
-        Ok(Server {
-            hostname: hostname.to_owned(),
-            port,
-        })
+        Ok(Server { hostname, port })
     }
 }

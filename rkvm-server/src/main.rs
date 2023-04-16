@@ -5,7 +5,6 @@ use clap::Parser;
 use config::Config;
 use log::LevelFilter;
 use rkvm_input::{Direction, Event, EventManager, Key, KeyKind};
-use rkvm_net::{self, Message};
 use slab::Slab;
 use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
@@ -65,7 +64,7 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        // This is needed to properly clean evdev stuff up.
+        // This is needed to properly clean libevent stuff up.
         result = signal::ctrl_c() => {
             if let Err(err) = result {
                 log::error!("Error setting up signal handler: {}", err);
@@ -130,7 +129,7 @@ async fn run(listen: SocketAddr, acceptor: TlsAcceptor, switch_key: Key) -> Resu
                                 None => break,
                             };
 
-                            rkvm_net::write_message(&mut stream, &Message::Event(event)).await?;
+                            rkvm_net::write_message(&mut stream, &event).await?;
                             stream.flush().await?;
                         }
 

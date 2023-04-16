@@ -1,8 +1,7 @@
-use rkvm_input::Event;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::{Error, ErrorKind};
-use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 // Is it bold to assume there won't be more than 65536 protocol versions?
@@ -25,9 +24,10 @@ where
     writer.write_all(&version.to_le_bytes()).await
 }
 
-pub async fn read_message<R>(mut reader: R) -> Result<Message, Error>
+pub async fn read_message<R, T>(mut reader: R) -> Result<T, Error>
 where
     R: AsyncRead + Unpin,
+    T: DeserializeOwned,
 {
     let length = {
         let mut bytes = [0; 1];
@@ -42,7 +42,7 @@ where
     bincode::deserialize(&data).map_err(|err| Error::new(ErrorKind::InvalidData, err))
 }
 
-pub async fn write_message<W>(mut writer: W, message: &Message) -> Result<(), Error>
+pub async fn write_message<W, T: Serialize>(mut writer: W, message: &T) -> Result<(), Error>
 where
     W: AsyncWrite + Unpin,
 {
@@ -56,11 +56,4 @@ where
     writer.write_all(&data).await?;
 
     Ok(())
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum Message {
-    Event(Event),
-    // Sent only to keep the connection alive.
-    KeepAlive,
 }
