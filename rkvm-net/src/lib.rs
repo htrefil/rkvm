@@ -1,4 +1,4 @@
-use input::Event;
+use rkvm_input::Event;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::{Error, ErrorKind};

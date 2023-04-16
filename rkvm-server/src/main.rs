@@ -2,9 +2,9 @@ mod config;
 
 use anyhow::{Context, Error};
 use config::Config;
-use input::{Direction, Event, EventManager, Key, KeyKind};
+use rkvm_input::{Direction, Event, EventManager, Key, KeyKind};
 use log::LevelFilter;
-use net::{self, Message, PROTOCOL_VERSION};
+use rkvm_net::{self, Message, PROTOCOL_VERSION};
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -25,9 +25,9 @@ async fn handle_connection<T>(
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    net::write_version(&mut stream, PROTOCOL_VERSION).await?;
+    rkvm_net::write_version(&mut stream, PROTOCOL_VERSION).await?;
 
-    let version = net::read_version(&mut stream).await?;
+    let version = rkvm_net::read_version(&mut stream).await?;
     if version != PROTOCOL_VERSION {
         return Err(anyhow::anyhow!(
             "Incompatible protocol version (got {}, expecting {})",
@@ -38,15 +38,15 @@ where
 
     loop {
         // Send a keep alive message in intervals of half of the timeout just to be on the safe side.
-        let message = match time::timeout(net::MESSAGE_TIMEOUT / 2, receiver.recv()).await {
+        let message = match time::timeout(rkvm_net::MESSAGE_TIMEOUT / 2, receiver.recv()).await {
             Ok(Some(message)) => Message::Event(message),
             Ok(None) => return Ok(()),
             Err(_) => Message::KeepAlive,
         };
 
         time::timeout(
-            net::MESSAGE_TIMEOUT,
-            net::write_message(&mut stream, &message),
+            rkvm_net::MESSAGE_TIMEOUT,
+            rkvm_net::write_message(&mut stream, &message),
         )
         .await
         .context("Write timeout")??;

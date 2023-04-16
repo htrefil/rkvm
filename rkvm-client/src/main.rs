@@ -2,9 +2,9 @@ mod config;
 
 use anyhow::{Context, Error};
 use config::Config;
-use input::EventWriter;
+use rkvm_input::EventWriter;
 use log::LevelFilter;
-use net::{self, Message, PROTOCOL_VERSION};
+use rkvm_net::{self, Message, PROTOCOL_VERSION};
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -38,9 +38,9 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
 
     log::info!("Connected to {}:{}", server, port);
 
-    net::write_version(&mut stream, PROTOCOL_VERSION).await?;
+    rkvm_net::write_version(&mut stream, PROTOCOL_VERSION).await?;
 
-    let version = net::read_version(&mut stream).await?;
+    let version = rkvm_net::read_version(&mut stream).await?;
     if version != PROTOCOL_VERSION {
         return Err(anyhow::anyhow!(
             "Incompatible protocol version (got {}, expecting {})",
@@ -51,7 +51,7 @@ async fn run(server: &str, port: u16, certificate_path: &Path) -> Result<Infalli
 
     let mut writer = EventWriter::new().await?;
     loop {
-        let message = time::timeout(net::MESSAGE_TIMEOUT, net::read_message(&mut stream))
+        let message = time::timeout(rkvm_net::MESSAGE_TIMEOUT, rkvm_net::read_message(&mut stream))
             .await
             .context("Read timed out")??;
         match message {

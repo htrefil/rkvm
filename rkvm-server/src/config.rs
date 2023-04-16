@@ -1,4 +1,4 @@
-use input::Key;
+use rkvm_input::Key;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::net::SocketAddr;

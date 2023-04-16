@@ -1,5 +1,5 @@
 [package]
-name = "input"
+name = "rkvm-input"
 version = "0.2.0"
 authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
 edition = "2018"
