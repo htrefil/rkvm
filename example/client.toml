@@ -1,2 +1,3 @@
 server = "localhost:5258"
 certificate = "example/certificate.crt"
+password = "123456789"

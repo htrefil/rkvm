@@ -1,22 +1,14 @@
 mod config;
+mod server;
 mod tls;
 
 use clap::Parser;
 use config::Config;
 use log::LevelFilter;
-use rkvm_input::{Direction, Event, EventManager, Key, KeyKind};
-use rkvm_net::Message;
-use slab::Slab;
-use std::io::Error;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tokio::fs;
-use tokio::io::{AsyncWriteExt, BufStream};
-use tokio::net::TcpListener;
 use tokio::signal;
-use tokio::sync::mpsc::{self, Sender};
-use tokio_rustls::TlsAcceptor;
 
 #[derive(Parser)]
 #[structopt(name = "rkvm-server", about = "The rkvm server application")]
@@ -59,9 +51,9 @@ async fn main() -> ExitCode {
     };
 
     tokio::select! {
-        result = run(config.listen, acceptor, config.switch_key) => {
+        result = server::run(config.listen, acceptor, &config.password, config.switch_key) => {
             if let Err(err) = result {
-                log::error!("Error running server: {}", err);
+                log::error!("Error: {}", err);
                 return ExitCode::FAILURE;
             }
         }
@@ -77,81 +69,4 @@ async fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
-}
-
-async fn run(listen: SocketAddr, acceptor: TlsAcceptor, switch_key: Key) -> Result<(), Error> {
-    let listener = TcpListener::bind(&listen).await?;
-    log::info!("Listening on {}", listen);
-
-    let mut clients = Slab::<Sender<_>>::new();
-    let mut current = 0;
-    let mut manager = EventManager::new().await?;
-
-    loop {
-        tokio::select! {
-            result = listener.accept() => {
-                // Remove dead clients.
-                clients.retain(|_, client| !client.is_closed());
-                if !clients.contains(current) {
-                    current = 0;
-                }
-
-                let (stream, addr) = result?;
-                let acceptor = acceptor.clone();
-
-                let (sender, mut receiver) = mpsc::channel::<Event>(1);
-                clients.insert(sender);
-
-                tokio::spawn(async move {
-                    let stream = match acceptor.accept(stream).await {
-                        Ok(stream) => stream,
-                        Err(err) => {
-                            log::error!("{}: TLS accept error: {}", addr, err);
-                            return;
-                        }
-                    };
-
-                    log::info!("{}: Connected", addr);
-
-                    let result = async {
-                        let mut stream = BufStream::with_capacity(1024, 1024, stream);
-
-                        rkvm_net::negotiate(&mut stream).await?;
-
-                        loop {
-                            let event = match receiver.recv().await {
-                                Some(event) => event,
-                                None => break,
-                            };
-
-                            event.encode(&mut stream).await?;
-                            stream.flush().await?;
-                        }
-
-                        Ok::<_, Error>(())
-                    }
-                    .await;
-
-                    match result {
-                        Ok(()) => log::info!("{}: Disconnected", addr),
-                        Err(err) => log::error!("{}: Disconnected: {}", addr, err),
-                    }
-                });
-            }
-            result = manager.read() => {
-                let event = result?;
-                if let Event::Key { direction: Direction::Down, kind: KeyKind::Key(key) } = event {
-                    if key == switch_key {
-                        current = (current + 1) % (clients.len() + 1);
-                        log::info!("Switching to client {}", current);
-                    }
-                }
-
-                if current == 0 || clients[current].send(event).await.is_err() {
-                    current = 0;
-                    manager.write(event).await?;
-                }
-            }
-        }
-    }
 }

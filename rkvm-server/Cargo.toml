@@ -20,6 +20,7 @@ tokio-rustls = "0.24.0"
 rustls-pemfile = "1.0.2"
 thiserror = "1.0.40"
 slab = "0.4.8"
+rand = "0.8.5"
 
 [package.metadata.rpm]
 package = "rkvm-server"

@@ -7,7 +7,8 @@ use std::path::PathBuf;
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub listen: SocketAddr,
-    pub switch_key: Key,
     pub certificate: PathBuf,
     pub key: PathBuf,
+    pub password: String,
+    pub switch_key: Key,
 }

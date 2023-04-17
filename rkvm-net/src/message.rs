@@ -33,7 +33,9 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
             .len()
             .try_into()
             .map_err(|_| Error::new(ErrorKind::InvalidInput, "Data too large"))?;
+
         stream.write_u16(length).await?;
+        stream.write_all(&data).await?;
 
         Ok(())
     }

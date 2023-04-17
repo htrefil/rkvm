@@ -1,19 +1,14 @@
+mod client;
 mod config;
 mod tls;
 
 use clap::Parser;
 use config::Config;
 use log::LevelFilter;
-use rkvm_input::EventWriter;
-use rkvm_net::Message;
-use std::io::Error;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tokio::fs;
-use tokio::net::TcpStream;
 use tokio::signal;
-use tokio_rustls::rustls::ServerName;
-use tokio_rustls::TlsConnector;
 
 #[derive(Parser)]
 #[structopt(name = "rkvm-client", about = "The rkvm client application")]
@@ -56,9 +51,9 @@ async fn main() -> ExitCode {
     };
 
     tokio::select! {
-        result = run(&config.server.hostname, config.server.port, connector) => {
+        result = client::run(&config.server.hostname, config.server.port, connector, &config.password) => {
             if let Err(err) = result {
-                log::error!("Error running client: {}", err);
+                log::error!("Error: {}", err);
                 return ExitCode::FAILURE;
             }
         }
@@ -74,23 +69,4 @@ async fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
-}
-
-async fn run(hostname: &ServerName, port: u16, connector: TlsConnector) -> Result<(), Error> {
-    let stream = match hostname {
-        ServerName::DnsName(name) => TcpStream::connect(&(name.as_ref(), port)).await?,
-        ServerName::IpAddress(address) => TcpStream::connect(&(*address, port)).await?,
-        _ => unimplemented!("Unhandled rustls ServerName variant"),
-    };
-
-    let mut stream = connector.connect(hostname.clone(), stream).await?;
-    log::info!("Connected to server");
-
-    rkvm_net::negotiate(&mut stream).await?;
-
-    let mut writer = EventWriter::new().await?;
-    loop {
-        let event = Message::decode(&mut stream).await?;
-        writer.write(event).await?;
-    }
 }

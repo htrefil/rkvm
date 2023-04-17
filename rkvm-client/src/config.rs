@@ -9,7 +9,9 @@ use tokio_rustls::rustls::ServerName;
 pub struct Config {
     pub server: Server,
     pub certificate: PathBuf,
+    pub password: String,
 }
+
 pub struct Server {
     pub hostname: ServerName,
     pub port: u16,
