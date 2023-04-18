@@ -5,7 +5,7 @@ It is based on a client/server architecture, where server is the machine control
 Switching between different clients is done by a configurable keyboard shortcut.
 
 ## Features
-- TLS encrypted by default, backed by OpenSSL on Linux and SChannel on Windows (should be already installed on your machine by default)
+- TLS encrypted by default, backed by [rustls](https://github.com/rustls/rustls)
 - Display server agnostic
 - Low overhead
 
@@ -25,15 +25,14 @@ Switching between different clients is done by a configurable keyboard shortcut.
 
    Note that you need to have libevdev installed on your system, otherwise the build will fail.
 
-2. Generate server certificates. The repo contains a simple Rust program, `certificate-gen`, to aid certificate generation. To see usage, run:
+2. Generate server certificates. The repo contains a simple Rust program, `rkvm-certificate-gen`, to aid certificate generation. To see usage, run:
 
-       $ cargo run --bin certificate-gen -- --help
+       $ cargo run --bin rkvm-certificate-gen -- --help
 
    For example, where your server is *my-server-name* and your local network is *example.lan*, you might generate certificates with:
 
        $ mkdir cert/
-       $ target/release/certificate-gen cert/my-server-name.p12 \
-           cert/my-server-name_cert.pem \
+       $ target/release/rkvm-certificate-gen cert/my-server-name_cert.pem \
            cert/my-server-name_key.pem \
            --dns-names my-server-name.example.lan
 
@@ -89,11 +88,11 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 - When Windows UAC is active the client needs elevated privileges to function properly. You may need to run the client in the System account (e.g. `psexec -sid client ...`)
 
 ## Project structure
-- `server` - server application code
-- `client` - client application code
-- `input` - handles reading from and writing to input devices
-- `net` - network protocol encoding and decoding
-- `certificate-gen` - certificate generation tool
+- `rkvm-server` - server application code
+- `rkvm-client` - client application code
+- `rkvm-input` - handles reading from and writing to input devices
+- `rkvm-net` - network protocol encoding and decoding
+- `rkvm-certificate-gen` - certificate generation tool
 
 [Bincode](https://github.com/servo/bincode) is used for encoding of messages on the network and [Tokio](https://tokio.rs) as an asynchronous runtime.
 
