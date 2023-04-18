@@ -797,7 +797,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-certificate-gen"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "clap 4.2.2",
  "tempfile",
@@ -806,7 +806,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-client"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap 4.2.2",
  "env_logger 0.8.4",
@@ -823,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-input"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "bindgen",
  "futures",
@@ -838,7 +838,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-net"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-server"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap 4.2.2",
  "env_logger 0.8.4",
