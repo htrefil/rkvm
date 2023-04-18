@@ -6,26 +6,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  windows:
-    runs-on: windows-latest
-
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - uses: actions/checkout@v2
-      - name: Test
-        run: cargo test --release
-      - name: Build
-        run: cargo build --release
-      - name: Upload portable executable
-        uses: actions/upload-artifact@v2
-        with:
-          name: release
-          path: |
-            target/release/*.exe
-
   ubuntu:
     runs-on: ubuntu-latest
 
