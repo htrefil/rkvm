@@ -1,5 +1,5 @@
 # rkvm
-rkvm is a tool for sharing keyboard and mouse across multiple Linux and Windows machines.
+rkvm is a tool for sharing keyboard and mouse across multiple Linux machines.
 It is based on a client/server architecture, where server is the machine controlling mouse and keyboard and relays events (mouse move, key presses, ...) to clients.
 
 Switching between different clients is done by a configurable keyboard shortcut.
@@ -84,8 +84,6 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 
 ## Limitations
 - Only keyboard and relative mouse events work (that is, can be forwarded to clients)
-- Clients only are supported on Windows, however, server support will be added in the future
-- When Windows UAC is active the client needs elevated privileges to function properly. You may need to run the client in the System account (e.g. `psexec -sid client ...`)
 
 ## Project structure
 - `rkvm-server` - server application code
