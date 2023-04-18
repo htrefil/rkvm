@@ -1,6 +1,7 @@
 use crate::event::Event;
 use crate::linux::device_id;
-use crate::linux::glue::{self, input_event, libevdev, libevdev_uinput};
+use crate::linux::glue::{self, libevdev, libevdev_uinput};
+use crate::{Axis, Direction};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::ops::RangeInclusive;
@@ -39,35 +40,58 @@ impl EventWriter {
         };
 
         if ret < 0 {
-            unsafe { glue::libevdev_free(evdev) };
+            unsafe {
+                glue::libevdev_free(evdev);
+            }
+
             return Err(Error::from_raw_os_error(-ret));
         }
 
-        let uinput = unsafe { uinput.assume_init() };
-        Ok(Self { evdev, uinput })
+        Ok(Self {
+            evdev,
+            uinput: unsafe { uinput.assume_init() },
+        })
     }
 
-    pub async fn write(&mut self, event: Event) -> Result<(), Error> {
-        self.write_raw(event.to_raw())
-    }
+    pub async fn write(&mut self, events: &[Event]) -> Result<(), Error> {
+        let events = events
+            .iter()
+            .map(|event| match event {
+                Event::MouseScroll {
+                    axis: Axis::X,
+                    delta,
+                } => (glue::EV_REL, glue::REL_HWHEEL_HI_RES as _, *delta),
+                Event::MouseScroll {
+                    axis: Axis::Y,
+                    delta,
+                } => (glue::EV_REL, glue::REL_WHEEL_HI_RES as _, *delta),
+                Event::MouseMove {
+                    axis: Axis::X,
+                    delta,
+                } => (glue::EV_REL, glue::REL_X as _, *delta),
+                Event::MouseMove {
+                    axis: Axis::Y,
+                    delta,
+                } => (glue::EV_REL, glue::REL_Y as _, *delta),
+                Event::Key {
+                    direction: Direction::Up,
+                    kind,
+                } => (glue::EV_KEY, kind.to_raw(), 0),
+                Event::Key {
+                    direction: Direction::Down,
+                    kind,
+                } => (glue::EV_KEY, kind.to_raw(), 1),
+            })
+            .chain(std::iter::once((glue::EV_SYN, glue::SYN_REPORT as _, 0)));
 
-    pub(crate) fn write_raw(&mut self, event: input_event) -> Result<(), Error> {
-        // As far as tokio is concerned, the FD never becomes ready for writing, so just write it normally.
-        // If an error happens, it will be propagated to caller and the FD is opened in nonblocking mode anyway,
-        // so it shouldn't be an issue.
-        let events = [
-            (event.type_, event.code, event.value),
-            (glue::EV_SYN as _, glue::SYN_REPORT as _, 0), // Include EV_SYN.
-        ];
+        for (r#type, code, value) in events {
+            // TODO: Not exactly async.
 
-        for (r#type, code, value) in events.iter().cloned() {
+            // As far as tokio is concerned, the FD never becomes ready for writing, so just write it normally.
+            // If an error happens, it will be propagated to caller and the FD is opened in nonblocking mode anyway,
+            // so it shouldn't be an issue.
             let ret = unsafe {
-                glue::libevdev_uinput_write_event(
-                    self.uinput as *const _,
-                    r#type as _,
-                    code as _,
-                    value,
-                )
+                glue::libevdev_uinput_write_event(self.uinput as *const _, r#type, code, value)
             };
 
             if ret < 0 {

@@ -1,7 +1,7 @@
 use crate::event::Key;
 
 impl Key {
-    pub(crate) fn to_raw(&self) -> u16 {
+    pub(crate) fn to_raw(&self) -> u32 {
         use Key::*;
 
         match *self {
@@ -496,7 +496,7 @@ impl Key {
         }
     }
 
-    pub(crate) fn from_raw(code: u16) -> Option<Self> {
+    pub(crate) fn from_raw(code: u32) -> Option<Self> {
         use Key::*;
 
         // This is generated from linux headers, some patterns are unreachable, and we don't care.

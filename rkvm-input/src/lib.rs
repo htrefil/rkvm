@@ -12,4 +12,4 @@ pub use linux::{EventManager, EventWriter};
 #[cfg(target_os = "windows")]
 pub use windows::{EventManager, EventWriter};
 
-pub use event::{Axis, Button, Direction, Event, Key, KeyKind};
+pub use event::{Axis, Button, Direction, Event, EventPack, Key, KeyKind};

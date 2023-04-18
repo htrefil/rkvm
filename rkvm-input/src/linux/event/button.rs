@@ -1,7 +1,7 @@
 use crate::event::Button;
 
 impl Button {
-    pub(crate) fn to_raw(&self) -> u16 {
+    pub(crate) fn to_raw(&self) -> u32 {
         use Button::*;
 
         match *self {
@@ -127,7 +127,7 @@ impl Button {
         }
     }
 
-    pub(crate) fn from_raw(code: u16) -> Option<Self> {
+    pub(crate) fn from_raw(code: u32) -> Option<Self> {
         use Button::*;
 
         // This is generated from linux headers, some patterns are unreachable, and we don't care.

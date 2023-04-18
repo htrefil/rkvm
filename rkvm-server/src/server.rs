@@ -1,4 +1,4 @@
-use rkvm_input::{Direction, Event, EventManager, Key, KeyKind};
+use rkvm_input::{Direction, Event, EventManager, EventPack, Key, KeyKind};
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
@@ -67,18 +67,19 @@ pub async fn run(
                 });
             }
             result = manager.read() => {
-                let event = result.map_err(Error::Input)?;
-                if let Event::Key { direction: Direction::Down, kind: KeyKind::Key(key) } = event {
-                    if key == switch_key {
-                        current = (current + 1) % (clients.len() + 1);
-                        log::info!("Switching to client {}", current);
-                        continue;
+                let events = result.map_err(Error::Input)?;
+                for event in &events {
+                    if let Event::Key { direction: Direction::Down, kind: KeyKind::Key(key) } = event {
+                        if *key == switch_key {
+                            current = (current + 1) % (clients.len() + 1);
+                            log::info!("Switching to client {}", current);
+                        }
                     }
                 }
 
-                if current == 0 || clients[current - 1].send(event).await.is_err() {
+                if current == 0 || clients[current - 1].send(events.clone()).await.is_err() {
                     current = 0;
-                    manager.write(event).await.map_err(Error::Input)?;
+                    manager.write(&events).await.map_err(Error::Input)?;
                 }
             }
         }
@@ -98,7 +99,7 @@ enum ClientError {
 }
 
 async fn client(
-    mut receiver: Receiver<Event>,
+    mut receiver: Receiver<EventPack>,
     stream: TlsStream<TcpStream>,
     addr: SocketAddr,
     password: &str,
@@ -136,11 +137,16 @@ async fn client(
 
     log::info!("{}: Passed auth check", addr);
 
-    while let Some(event) = receiver.recv().await {
-        event.encode(&mut stream).await?;
+    while let Some(events) = receiver.recv().await {
+        events.encode(&mut stream).await?;
         stream.flush().await?;
 
-        log::trace!("{}: Sent event", addr);
+        log::trace!(
+            "{}: Sent {} event{}",
+            addr,
+            events.len(),
+            if events.len() == 1 { "" } else { "s" }
+        );
     }
 
     Ok(())

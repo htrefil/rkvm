@@ -5,10 +5,13 @@ pub use button::Button;
 pub use key::Key;
 
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
+
+pub type EventPack = SmallVec<[Event; 2]>;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Event {
-    MouseScroll { delta: i32 },
+    MouseScroll { axis: Axis, delta: i32 },
     MouseMove { axis: Axis, delta: i32 },
     Key { direction: Direction, kind: KeyKind },
 }

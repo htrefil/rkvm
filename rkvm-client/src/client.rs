@@ -1,4 +1,4 @@
-use rkvm_input::EventWriter;
+use rkvm_input::{EventPack, EventWriter};
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
@@ -77,10 +77,15 @@ pub async fn run(
 
     let mut writer = EventWriter::new().await.map_err(Error::Input)?;
     loop {
-        let event = Message::decode(&mut stream).await.map_err(Error::Network)?;
-        log::trace!("Received event");
+        let events = EventPack::decode(&mut stream)
+            .await
+            .map_err(Error::Network)?;
+        writer.write(&events).await.map_err(Error::Input)?;
 
-        writer.write(event).await.map_err(Error::Input)?;
-        log::trace!("Wrote event");
+        log::trace!(
+            "Wrote {} event{}",
+            events.len(),
+            if events.len() == 1 { "" } else { "s" }
+        );
     }
 }
