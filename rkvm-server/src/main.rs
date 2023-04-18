@@ -5,16 +5,21 @@ mod tls;
 use clap::Parser;
 use config::Config;
 use log::LevelFilter;
+use std::future;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Duration;
 use tokio::fs;
 use tokio::signal;
+use tokio::time;
 
 #[derive(Parser)]
 #[structopt(name = "rkvm-server", about = "The rkvm server application")]
 struct Args {
     #[structopt(help = "Path to configuration file")]
     config_path: PathBuf,
+    #[structopt(help = "Shutdown after N seconds", long, short)]
+    shutdown_after: Option<u64>,
 }
 
 #[tokio::main]
@@ -50,6 +55,13 @@ async fn main() -> ExitCode {
         }
     };
 
+    let shutdown = async {
+        match args.shutdown_after {
+            Some(shutdown_after) => time::sleep(Duration::from_secs(shutdown_after)).await,
+            None => future::pending().await,
+        }
+    };
+
     tokio::select! {
         result = server::run(config.listen, acceptor, &config.password, config.switch_key) => {
             if let Err(err) = result {
@@ -65,6 +77,9 @@ async fn main() -> ExitCode {
             }
 
             log::info!("Exiting on signal");
+        }
+        _ = shutdown => {
+            log::info!("Shutting down as requested");
         }
     }
 
