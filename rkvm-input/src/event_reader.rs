@@ -1,7 +1,7 @@
+use crate::device_id;
 use crate::event::{Axis, Direction, Event, EventPack};
-use crate::linux::device_id;
-use crate::linux::glue::{self, libevdev, libevdev_uinput};
-use crate::linux::glue::{input_event, timeval};
+use crate::glue::{self, libevdev, libevdev_uinput};
+use crate::glue::{input_event, timeval};
 use crate::KeyKind;
 
 use std::fs::{File, OpenOptions};

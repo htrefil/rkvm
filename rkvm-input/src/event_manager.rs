@@ -1,6 +1,6 @@
 use crate::event::{Event, EventPack};
-use crate::linux::event_reader::{EventReader, OpenError};
-use crate::linux::event_writer::EventWriter;
+use crate::event_reader::{EventReader, OpenError};
+use crate::event_writer::EventWriter;
 
 use futures::StreamExt;
 use inotify::{Inotify, WatchMask};

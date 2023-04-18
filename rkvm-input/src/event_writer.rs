@@ -1,6 +1,6 @@
+use crate::device_id;
 use crate::event::Event;
-use crate::linux::device_id;
-use crate::linux::glue::{self, libevdev, libevdev_uinput};
+use crate::glue::{self, libevdev, libevdev_uinput};
 use crate::{Axis, Direction};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
