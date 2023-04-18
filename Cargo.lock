@@ -796,7 +796,6 @@ dependencies = [
  "serde",
  "smallvec",
  "tokio",
- "winapi",
 ]
 
 [[package]]
