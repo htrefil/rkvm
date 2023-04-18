@@ -1,0 +1,13 @@
+[Unit]
+Description=rkvm client
+After=network-online.target
+# This prevents systemd from giving up trying to restart the service.
+StartLimitBurst=0
+
+[Service]
+ExecStart=/usr/bin/rkvm-client /etc/rkvm/client.toml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

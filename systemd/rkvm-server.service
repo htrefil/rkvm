@@ -3,8 +3,9 @@ Description=rkvm server
 After=network-online.target
 
 [Service]
-ExecStart=/opt/rkvm/server
+ExecStart=/usr/bin/rkvm-server /etc/rkvm/server.toml
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
