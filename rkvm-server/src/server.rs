@@ -3,6 +3,7 @@ use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
 use slab::Slab;
+use std::collections::HashSet;
 use std::io;
 use std::net::SocketAddr;
 use thiserror::Error;
@@ -24,7 +25,7 @@ pub async fn run(
     listen: SocketAddr,
     acceptor: TlsAcceptor,
     password: &str,
-    switch_key: Key,
+    switch_keys: &HashSet<Key>,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     log::info!("Listening on {}", listen);
@@ -32,6 +33,9 @@ pub async fn run(
     let mut clients = Slab::<Sender<_>>::new();
     let mut current = 0;
     let mut manager = EventManager::new().await.map_err(Error::Input)?;
+
+    let mut pressed_keys = HashSet::new();
+    let mut switched = false;
 
     loop {
         tokio::select! {
@@ -69,17 +73,46 @@ pub async fn run(
             result = manager.read() => {
                 let events = result.map_err(Error::Input)?;
                 for event in &events {
-                    if let Event::Key { direction: Direction::Down, kind: KeyKind::Key(key) } = event {
-                        if *key == switch_key {
-                            current = (current + 1) % (clients.len() + 1);
-                            log::info!("Switching to client {}", current);
-                        }
+                    let (direction, key) = match event {
+                        Event::Key { direction, kind: KeyKind::Key(key) } => (direction, key),
+                        _ => continue,
+                    };
+
+                    if !switch_keys.contains(key) {
+                        continue;
                     }
+
+                    match direction {
+                        Direction::Up => pressed_keys.remove(key),
+                        Direction::Down => pressed_keys.insert(*key),
+                    };
                 }
 
-                if current == 0 || clients[current - 1].send(events.clone()).await.is_err() {
-                    current = 0;
+                let prev = current;
+                if pressed_keys.len() == switch_keys.len() && !switched {
+                    switched = true;
+
+                    let exists = |idx| idx == 0 || clients.contains(idx - 1);
+                    loop {
+                        current = (current + 1) % (clients.len() + 1);
+                        if exists(current) {
+                           break;
+                        }
+                    }
+
+                    log::info!("Switching to client {}", current);
+                } else {
+                    switched = false;
+                }
+
+                if prev == 0 {
                     manager.write(&events).await.map_err(Error::Input)?;
+                    continue;
+                }
+
+                if clients[prev - 1].send(events).await.is_err() && current == prev {
+                    clients.remove(current - 1);
+                    current = 0;
                 }
             }
         }

@@ -63,13 +63,13 @@ async fn main() -> ExitCode {
     };
 
     tokio::select! {
-        result = server::run(config.listen, acceptor, &config.password, config.switch_key) => {
+        result = server::run(config.listen, acceptor, &config.password, &config.switch_keys) => {
             if let Err(err) = result {
                 log::error!("Error: {}", err);
                 return ExitCode::FAILURE;
             }
         }
-        // This is needed to properly clean libevent stuff up.
+        // This is needed to properly clean libevdev stuff up.
         result = signal::ctrl_c() => {
             if let Err(err) = result {
                 log::error!("Error setting up signal handler: {}", err);

@@ -1,5 +1,5 @@
 listen = "0.0.0.0:5258"
-switch-key = "LeftAlt"
+switch-keys = ["LeftAlt", "LeftCtrl"]
 certificate = "example/certificate.crt"
 key = "example/key.pem"
 password = "123456789"

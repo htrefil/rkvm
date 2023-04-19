@@ -1,5 +1,6 @@
 use rkvm_input::Key;
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -10,5 +11,5 @@ pub struct Config {
     pub certificate: PathBuf,
     pub key: PathBuf,
     pub password: String,
-    pub switch_key: Key,
+    pub switch_keys: HashSet<Key>,
 }
