@@ -1,14 +1,20 @@
 use crate::device_id;
 use crate::event::Event;
-use crate::glue::{self, libevdev, libevdev_uinput};
+use crate::glue::{self, input_event, libevdev, libevdev_uinput, timeval};
 use crate::{Axis, Direction};
+
+use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::ops::RangeInclusive;
+use std::os::fd::AsRawFd;
+use std::ptr::NonNull;
+use tokio::io::unix::AsyncFd;
 
 pub struct EventWriter {
-    evdev: *mut libevdev,
-    uinput: *mut libevdev_uinput,
+    evdev_handle: NonNull<libevdev>,
+    uinput_file: AsyncFd<File>,
+    uinput_handle: NonNull<libevdev_uinput>,
 }
 
 impl EventWriter {
@@ -17,39 +23,50 @@ impl EventWriter {
     }
 
     fn new_sync() -> Result<Self, Error> {
-        let evdev = unsafe { glue::libevdev_new() };
-        if evdev.is_null() {
-            return Err(Error::new(ErrorKind::Other, "Failed to create device"));
-        }
+        let evdev_handle = unsafe { glue::libevdev_new() };
+        let evdev_handle = NonNull::new(evdev_handle)
+            .ok_or_else(|| Error::new(ErrorKind::Other, "Failed to create device"))?;
 
-        if let Err(err) = unsafe { setup_evdev(evdev) } {
+        if let Err(err) = unsafe { setup_evdev(evdev_handle.as_ptr()) } {
             unsafe {
-                glue::libevdev_free(evdev);
+                glue::libevdev_free(evdev_handle.as_ptr());
             }
 
             return Err(err);
         }
 
-        let mut uinput = MaybeUninit::uninit();
+        // libevdev opens /dev/uinput with O_RDWR.
+        let uinput_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/uinput")
+            .and_then(AsyncFd::new)?;
+
+        let mut uinput_handle = MaybeUninit::uninit();
+
         let ret = unsafe {
             glue::libevdev_uinput_create_from_device(
-                evdev,
-                glue::libevdev_uinput_open_mode_LIBEVDEV_UINPUT_OPEN_MANAGED,
-                uinput.as_mut_ptr(),
+                evdev_handle.as_ptr(),
+                uinput_file.as_raw_fd(),
+                uinput_handle.as_mut_ptr(),
             )
         };
 
         if ret < 0 {
             unsafe {
-                glue::libevdev_free(evdev);
+                glue::libevdev_free(evdev_handle.as_ptr());
             }
 
             return Err(Error::from_raw_os_error(-ret));
         }
 
+        let uinput_handle = unsafe { uinput_handle.assume_init() };
+        let uinput_handle = NonNull::new(uinput_handle).unwrap();
+
         Ok(Self {
-            evdev,
-            uinput: unsafe { uinput.assume_init() },
+            evdev_handle,
+            uinput_file,
+            uinput_handle,
         })
     }
 
@@ -85,29 +102,53 @@ impl EventWriter {
             .chain(std::iter::once((glue::EV_SYN, glue::SYN_REPORT as _, 0)));
 
         for (r#type, code, value) in events {
-            // TODO: Not exactly async.
-
-            // As far as tokio is concerned, the FD never becomes ready for writing, so just write it normally.
-            // If an error happens, it will be propagated to caller and the FD is opened in nonblocking mode anyway,
-            // so it shouldn't be an issue.
-            let ret = unsafe {
-                glue::libevdev_uinput_write_event(self.uinput as *const _, r#type, code, value)
-            };
-
-            if ret < 0 {
-                return Err(Error::from_raw_os_error(-ret));
-            }
+            self.write_raw(&input_event {
+                type_: r#type as _,
+                code: code as _,
+                value,
+                time: timeval {
+                    tv_sec: 0,
+                    tv_usec: 0,
+                },
+            })
+            .await?;
         }
 
         Ok(())
+    }
+
+    async fn write_raw(&mut self, event: &input_event) -> Result<(), Error> {
+        loop {
+            let result = self.uinput_file.writable().await?.try_io(|_| {
+                let ret = unsafe {
+                    glue::libevdev_uinput_write_event(
+                        self.uinput_handle.as_ptr(),
+                        event.type_ as _,
+                        event.code as _,
+                        event.value,
+                    )
+                };
+
+                if ret < 0 {
+                    return Err(Error::from_raw_os_error(-ret).into());
+                }
+
+                Ok(())
+            });
+
+            match result {
+                Ok(result) => return result,
+                Err(_) => continue, // This means it would block.
+            }
+        }
     }
 }
 
 impl Drop for EventWriter {
     fn drop(&mut self) {
         unsafe {
-            glue::libevdev_uinput_destroy(self.uinput);
-            glue::libevdev_free(self.evdev);
+            glue::libevdev_uinput_destroy(self.uinput_handle.as_ptr());
+            glue::libevdev_free(self.evdev_handle.as_ptr());
         }
     }
 }
