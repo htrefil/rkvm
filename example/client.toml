@@ -1,3 +1,8 @@
-server = "localhost:5258"
-certificate = "example/certificate.crt"
+server = "myserver.local:5258"
+certificate = "/etc/rkvm/certificate.pem"
+
+# This is to prevent malicious clients from connecting to the server.
+# Make sure this matches your server's config.
+#
+# Change this to your own value before deploying rkvm.
 password = "123456789"

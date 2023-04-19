@@ -1,5 +1,10 @@
 listen = "0.0.0.0:5258"
 switch-keys = ["LeftAlt", "LeftCtrl"]
-certificate = "example/certificate.crt"
-key = "example/key.pem"
+certificate = "/etc/rkvm/certificate.crt"
+key = "/etc/rkvm/key.pem"
+
+# This is to prevent malicious clients from connecting to the server.
+# Make sure this matches your client's config.
+#
+# Change this to your own value before deploying rkvm.
 password = "123456789"
