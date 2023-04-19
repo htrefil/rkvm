@@ -61,7 +61,7 @@ enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     Fmt(#[from] fmt::Error),
-    #[error("Bad exit status {0}")]
+    #[error("Bad exit: {0}")]
     BadExit(ExitStatus),
 }
 
@@ -79,12 +79,6 @@ req_extensions = req_ext
 x509_extensions = v3_req
 [req_distinguished_name]
 commonName = rkvm
-countryName = CZ
-localityName = rkvm
-organizationName = rkvm
-organizationalUnitName = IT
-stateOrProvinceName = rkvm
-emailAddress = nowhere@example.com
 [req_ext]
 subjectAltName = @alt_names
 [v3_req]
@@ -108,8 +102,6 @@ subjectAltName = @alt_names
         .arg("-sha256")
         .arg("-x509")
         .arg("-nodes")
-        .arg("-days")
-        .arg("365")
         .arg("-newkey")
         .arg("rsa:2048")
         .arg("-keyout")
