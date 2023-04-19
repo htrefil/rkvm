@@ -57,7 +57,7 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        // This is needed to properly clean libevent stuff up.
+        // This is needed to properly clean libevdev stuff up.
         result = signal::ctrl_c() => {
             if let Err(err) = result {
                 log::error!("Error setting up signal handler: {}", err);
