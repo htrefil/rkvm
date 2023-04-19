@@ -33,7 +33,8 @@ Additionally, rkvm doesn't even know or care about X, Wayland or any display ser
 Regardless, if you want a working and stable solution for crossplatform keyboard and mouse sharing, you should probably use either of the above mentioned programs for the time being.
 
 ## Limitations
-- Only keyboard and relative mouse events work (that is, can be forwarded to clients)
+- Only keyboard and relative mouse events work (no support for touchpads or other absolutely positioned devices)
+- Linux only
 
 ## Project structure
 - `rkvm-server` - server application code
