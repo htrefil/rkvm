@@ -35,7 +35,6 @@ pub async fn run(
     let mut manager = EventManager::new().await.map_err(Error::Input)?;
 
     let mut pressed_keys = HashSet::new();
-    let mut switched = false;
 
     loop {
         tokio::select! {
@@ -71,6 +70,8 @@ pub async fn run(
                 });
             }
             result = manager.read() => {
+                let mut changed = false;
+
                 let events = result.map_err(Error::Input)?;
                 for event in &events {
                     let (direction, key) = match event {
@@ -82,37 +83,38 @@ pub async fn run(
                         continue;
                     }
 
+                    changed = true;
+
                     match direction {
                         Direction::Up => pressed_keys.remove(key),
                         Direction::Down => pressed_keys.insert(*key),
                     };
                 }
 
-                let prev = current;
-                if pressed_keys.len() == switch_keys.len() && !switched {
-                    switched = true;
+                // Who to send this batch of events to.
+                let idx = current;
 
+                if changed && pressed_keys.len() == switch_keys.len() {
                     let exists = |idx| idx == 0 || clients.contains(idx - 1);
                     loop {
                         current = (current + 1) % (clients.len() + 1);
                         if exists(current) {
-                           break;
+                            break;
                         }
                     }
-
-                    log::info!("Switching to client {}", current);
-                } else {
-                    switched = false;
                 }
 
-                if prev == 0 {
+                if idx == 0 {
                     manager.write(&events).await.map_err(Error::Input)?;
                     continue;
                 }
 
-                if clients[prev - 1].send(events).await.is_err() && current == prev {
-                    clients.remove(current - 1);
-                    current = 0;
+                if clients[idx - 1].send(events).await.is_err() {
+                    clients.remove(idx - 1);
+
+                    if current == idx {
+                        current = 0;
+                    }
                 }
             }
         }
