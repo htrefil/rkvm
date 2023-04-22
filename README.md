@@ -17,8 +17,20 @@ Switching between different clients is done by a configurable keyboard shortcut.
 - libevdev development files (`sudo apt install libevdev-dev` on Debian/Ubuntu)
 - Clang/LLVM (`sudo apt install clang` on Debian/Ubuntu)
 
+## Manual installation
+If you can, it is strongly recommended to use the [AUR package](https://aur.archlinux.org/packages/rkvm) to install rkvm.
+
+```
+$ cargo build --release
+$ sudo cp target/release/rkvm-client /usr/bin/
+$ sudo cp target/release/rkvm-server /usr/bin/
+$ sudo cp target/release/rkvm-certificate-gen /usr/bin/ # Optional
+$ sudo cp systemd/rkvm-client.service /usr/lib/systemd/system/
+$ sudo cp systemd/rkvm-server.service /usr/lib/systemd/system/
+```
+
 ## Configuration
-After installation...
+After installation:
 - Generate a certificate and private key using the `rkvm-certificate-gen` tool or provide your own from other sources.
 - For server, place both the certificate and private key in `/etc/rkvm/certificate.pem` and `/etc/rkvm/key.pem` respectively.
 - For client, place the certificate to `/etc/rkvm/certificate.pem`
