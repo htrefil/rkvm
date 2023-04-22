@@ -34,15 +34,17 @@ pub async fn run(
         ServerName::IpAddress(address) => TcpStream::connect(&(*address, port))
             .await
             .map_err(Error::Network)?,
-        _ => unimplemented!("Unhandled rustls ServerName variant"),
+        _ => unimplemented!("Unhandled rustls ServerName variant: {:?}", hostname),
     };
+
+    log::info!("Connected to server");
 
     let stream = connector
         .connect(hostname.clone(), stream)
         .await
         .map_err(Error::Network)?;
 
-    log::info!("Connected to server");
+    log::info!("TLS connected");
 
     let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
@@ -73,7 +75,7 @@ pub async fn run(
         AuthStatus::Failed => return Err(Error::Auth),
     }
 
-    log::info!("Passed auth check");
+    log::info!("Authenticated successfully");
 
     let mut writer = EventWriter::new().await.map_err(Error::Input)?;
     loop {
