@@ -17,7 +17,7 @@ pub enum Error {
     Input(io::Error),
     #[error("Incompatible server version (got {server}, expected {client})")]
     Version { server: Version, client: Version },
-    #[error("Auth challenge failed (possibly wrong password)")]
+    #[error("Invalid password")]
     Auth,
 }
 

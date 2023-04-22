@@ -120,7 +120,7 @@ enum ClientError {
     Io(#[from] io::Error),
     #[error("Incompatible client version (got {client}, expected {server})")]
     Version { server: Version, client: Version },
-    #[error("Auth challenge failed (possibly wrong password)")]
+    #[error("Invalid password")]
     Auth,
     #[error(transparent)]
     Rand(#[from] rand::Error),
