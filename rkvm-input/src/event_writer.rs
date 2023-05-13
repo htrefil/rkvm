@@ -1,4 +1,3 @@
-use crate::device_id;
 use crate::event::Event;
 use crate::glue::{self, input_event, libevdev, libevdev_uinput, timeval};
 use crate::{Axis, Direction};
@@ -9,6 +8,7 @@ use std::mem::MaybeUninit;
 use std::ops::RangeInclusive;
 use std::os::fd::AsRawFd;
 use std::ptr::NonNull;
+use std::{iter, ptr};
 use tokio::io::unix::AsyncFd;
 
 pub struct EventWriter {
@@ -99,7 +99,7 @@ impl EventWriter {
                     kind,
                 } => (glue::EV_KEY, kind.to_raw(), 1),
             })
-            .chain(std::iter::once((glue::EV_SYN, glue::SYN_REPORT as _, 0)));
+            .chain(iter::once((glue::EV_SYN, glue::SYN_REPORT as _, 0)));
 
         for (r#type, code, value) in events {
             self.write_raw(&input_event {
@@ -162,11 +162,11 @@ const TYPES: &[(u32, &[RangeInclusive<u32>])] = &[
 ];
 
 unsafe fn setup_evdev(evdev: *mut libevdev) -> Result<(), Error> {
-    glue::libevdev_set_name(evdev, b"rkvm\0".as_ptr() as *const _);
-    glue::libevdev_set_id_vendor(evdev, device_id::VENDOR as _);
-    glue::libevdev_set_id_product(evdev, device_id::PRODUCT as _);
-    glue::libevdev_set_id_version(evdev, device_id::VERSION as _);
-    glue::libevdev_set_id_bustype(evdev, glue::BUS_USB as _);
+    glue::libevdev_set_name(evdev, "rkvm\0".as_ptr() as *const _);
+    glue::libevdev_set_id_vendor(evdev, 0);
+    glue::libevdev_set_id_product(evdev, 0);
+    glue::libevdev_set_id_version(evdev, 0);
+    glue::libevdev_set_id_bustype(evdev, glue::BUS_VIRTUAL as _);
 
     for (r#type, codes) in TYPES.iter().copied() {
         let ret = glue::libevdev_enable_event_type(evdev, r#type);
@@ -175,7 +175,7 @@ unsafe fn setup_evdev(evdev: *mut libevdev) -> Result<(), Error> {
         }
 
         for code in codes.iter().cloned().flatten() {
-            let ret = glue::libevdev_enable_event_code(evdev, r#type, code, std::ptr::null_mut());
+            let ret = glue::libevdev_enable_event_code(evdev, r#type, code, ptr::null_mut());
             if ret < 0 {
                 return Err(Error::from_raw_os_error(-ret));
             }

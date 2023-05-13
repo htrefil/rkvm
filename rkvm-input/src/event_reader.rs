@@ -1,8 +1,5 @@
-use crate::device_id;
-use crate::event::{Axis, Direction, Event, EventBatch};
-use crate::glue::{self, libevdev, libevdev_uinput};
-use crate::glue::{input_event, timeval};
-use crate::KeyKind;
+use crate::event::{Axis, Direction, Event, EventBatch, KeyKind};
+use crate::glue::{self, input_event, libevdev, libevdev_uinput, timeval};
 
 use std::fs::{File, OpenOptions};
 use std::io::Error;
@@ -49,27 +46,16 @@ impl EventReader {
         let evdev_handle = unsafe { evdev_handle.assume_init() };
         let evdev_handle = NonNull::new(evdev_handle).unwrap();
 
-        let (vendor, product, version) = unsafe {
-            (
-                glue::libevdev_get_id_vendor(evdev_handle.as_ptr()),
-                glue::libevdev_get_id_product(evdev_handle.as_ptr()),
-                glue::libevdev_get_id_version(evdev_handle.as_ptr()),
-            )
-        };
-
-        // Check if we're not opening our own virtual device.
-        let vendor = vendor == device_id::VENDOR as _
-            && product == device_id::PRODUCT as _
-            && version == device_id::VERSION as _;
-
         // "Upon binding to a device or resuming from suspend, a driver must report
         // the current switch state. This ensures that the device, kernel, and userspace
         // state is in sync."
         // We have no way of knowing that.
-        let has_sw =
-            unsafe { glue::libevdev_has_event_type(evdev_handle.as_ptr(), glue::EV_SW) == 1 };
+        let sw = unsafe { glue::libevdev_has_event_type(evdev_handle.as_ptr(), glue::EV_SW) };
 
-        if vendor || has_sw {
+        // Check if we're not opening our own virtual device.
+        let bus_type = unsafe { glue::libevdev_get_id_bustype(evdev_handle.as_ptr()) };
+
+        if bus_type == glue::BUS_VIRTUAL as _ || sw == 1 {
             unsafe {
                 glue::libevdev_free(evdev_handle.as_ptr());
             }
@@ -78,9 +64,7 @@ impl EventReader {
         }
 
         unsafe {
-            glue::libevdev_set_id_vendor(evdev_handle.as_ptr(), device_id::VENDOR as _);
-            glue::libevdev_set_id_product(evdev_handle.as_ptr(), device_id::PRODUCT as _);
-            glue::libevdev_set_id_version(evdev_handle.as_ptr(), device_id::VERSION as _);
+            glue::libevdev_set_id_bustype(evdev_handle.as_ptr(), glue::BUS_VIRTUAL as _);
         }
 
         let ret = unsafe {
