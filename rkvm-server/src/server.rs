@@ -99,6 +99,13 @@ pub async fn run(
 
                 if idx == 0 {
                     manager.write(&events).await.map_err(Error::Input)?;
+
+                    log::trace!(
+                        "Wrote {} event{}",
+                        events.len(),
+                        if events.len() == 1 { "" } else { "s" }
+                    );
+
                     continue;
                 }
 
