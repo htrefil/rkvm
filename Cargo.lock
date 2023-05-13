@@ -806,6 +806,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "hmac",
+ "log",
  "rand",
  "rkvm-input",
  "serde",

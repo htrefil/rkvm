@@ -19,9 +19,13 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
         let mut data = vec![0; length.into()];
         stream.read_exact(&mut data).await?;
 
-        options()
+        let data = options()
             .deserialize(&data)
-            .map_err(|err| Error::new(ErrorKind::InvalidData, err))
+            .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+
+        log::trace!("Read {} bytes", 2 + length);
+
+        Ok(data)
     }
 
     async fn encode<W: AsyncWrite + Send + Unpin>(&self, stream: &mut W) -> Result<(), Error> {
@@ -36,6 +40,8 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
 
         stream.write_u16(length).await?;
         stream.write_all(&data).await?;
+
+        log::trace!("Wrote {} bytes", 2 + data.len());
 
         Ok(())
     }
