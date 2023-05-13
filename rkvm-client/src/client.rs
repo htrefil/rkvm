@@ -37,6 +37,8 @@ pub async fn run(
         _ => unimplemented!("Unhandled rustls ServerName variant: {:?}", hostname),
     };
 
+    stream.set_linger(None).map_err(Error::Network)?;
+
     log::info!("Connected to server");
 
     let stream = connector

@@ -141,6 +141,8 @@ async fn client(
     password: &str,
 ) -> Result<(), ClientError> {
     let negotiate = async {
+        stream.set_linger(None)?;
+
         let stream = acceptor.accept(stream).await?;
         log::info!("{}: TLS connected", addr);
 
