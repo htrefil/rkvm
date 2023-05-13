@@ -38,6 +38,7 @@ pub async fn run(
     };
 
     stream.set_linger(None).map_err(Error::Network)?;
+    stream.set_nodelay(false).map_err(Error::Network)?;
 
     log::info!("Connected to server");
 
