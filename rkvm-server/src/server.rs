@@ -200,7 +200,7 @@ async fn client(
             })??;
 
         log::trace!(
-            "{}: Sent {} event{}",
+            "{}: Wrote {} event{}",
             addr,
             events.len(),
             if events.len() == 1 { "" } else { "s" }
