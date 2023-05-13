@@ -7,7 +7,7 @@ pub use key::Key;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-pub type EventPack = SmallVec<[Event; 2]>;
+pub type EventBatch = SmallVec<[Event; 2]>;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Event {

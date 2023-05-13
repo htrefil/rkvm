@@ -1,4 +1,4 @@
-use crate::event::{Event, EventPack};
+use crate::event::{Event, EventBatch};
 use crate::event_reader::{EventReader, OpenError};
 use crate::event_writer::EventWriter;
 
@@ -15,7 +15,7 @@ const EVENT_PATH: &str = "/dev/input";
 
 pub struct EventManager {
     event_writer: EventWriter,
-    event_receiver: Receiver<Result<EventPack, Error>>,
+    event_receiver: Receiver<Result<EventBatch, Error>>,
 }
 
 impl EventManager {
@@ -78,7 +78,7 @@ impl EventManager {
         })
     }
 
-    pub async fn read(&mut self) -> Result<EventPack, Error> {
+    pub async fn read(&mut self) -> Result<EventBatch, Error> {
         self.event_receiver.recv().await.unwrap()
     }
 
@@ -87,7 +87,7 @@ impl EventManager {
     }
 }
 
-async fn spawn_reader(path: &Path, sender: Sender<Result<EventPack, Error>>) -> Result<(), Error> {
+async fn spawn_reader(path: &Path, sender: Sender<Result<EventBatch, Error>>) -> Result<(), Error> {
     if path.is_dir() {
         return Ok(());
     }

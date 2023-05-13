@@ -1,4 +1,4 @@
-use rkvm_input::{EventPack, EventWriter};
+use rkvm_input::{EventBatch, EventWriter};
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
@@ -79,7 +79,7 @@ pub async fn run(
 
     let mut writer = EventWriter::new().await.map_err(Error::Input)?;
     loop {
-        let events = EventPack::decode(&mut stream)
+        let events = EventBatch::decode(&mut stream)
             .await
             .map_err(Error::Network)?;
         writer.write(&events).await.map_err(Error::Input)?;

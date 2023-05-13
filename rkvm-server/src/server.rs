@@ -1,4 +1,4 @@
-use rkvm_input::{Direction, Event, EventManager, EventPack, Key, KeyKind};
+use rkvm_input::{Direction, Event, EventBatch, EventManager, Key, KeyKind};
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
@@ -127,7 +127,7 @@ enum ClientError {
 }
 
 async fn client(
-    mut receiver: Receiver<EventPack>,
+    mut receiver: Receiver<EventBatch>,
     stream: TcpStream,
     addr: SocketAddr,
     acceptor: TlsAcceptor,

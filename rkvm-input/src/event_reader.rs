@@ -1,5 +1,5 @@
 use crate::device_id;
-use crate::event::{Axis, Direction, Event, EventPack};
+use crate::event::{Axis, Direction, Event, EventBatch};
 use crate::glue::{self, libevdev, libevdev_uinput};
 use crate::glue::{input_event, timeval};
 use crate::KeyKind;
@@ -134,9 +134,9 @@ impl EventReader {
         })
     }
 
-    pub async fn read(&mut self) -> Result<EventPack, Error> {
+    pub async fn read(&mut self) -> Result<EventBatch, Error> {
         loop {
-            let mut events = EventPack::new();
+            let mut events = EventBatch::new();
             let mut wrote = false;
 
             loop {
