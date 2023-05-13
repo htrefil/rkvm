@@ -2,14 +2,18 @@ use crate::event::Event;
 use crate::glue::{self, input_event, libevdev, libevdev_uinput, timeval};
 use crate::{Axis, Direction};
 
+use std::ffi::{CStr, OsStr};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::ops::RangeInclusive;
 use std::os::fd::AsRawFd;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 use std::ptr::NonNull;
 use std::{iter, ptr};
 use tokio::io::unix::AsyncFd;
+use tokio::task;
 
 pub struct EventWriter {
     evdev_handle: NonNull<libevdev>,
@@ -19,7 +23,7 @@ pub struct EventWriter {
 
 impl EventWriter {
     pub async fn new() -> Result<Self, Error> {
-        tokio::task::spawn_blocking(Self::new_sync).await?
+        task::spawn_blocking(Self::new_sync).await?
     }
 
     fn new_sync() -> Result<Self, Error> {
@@ -62,6 +66,20 @@ impl EventWriter {
 
         let uinput_handle = unsafe { uinput_handle.assume_init() };
         let uinput_handle = NonNull::new(uinput_handle).unwrap();
+
+        let uinput_path = unsafe { glue::libevdev_uinput_get_devnode(uinput_handle.as_ptr()) };
+        let uinput_path = unsafe {
+            CStr::from_ptr(if uinput_path.is_null() {
+                "<unknown>".as_ptr() as *const _
+            } else {
+                uinput_path
+            })
+        };
+
+        let uinput_path = OsStr::from_bytes(uinput_path.to_bytes());
+        let uinput_path = Path::new(uinput_path);
+
+        log::info!("Registered virtual device at {}", uinput_path.display());
 
         Ok(Self {
             evdev_handle,

@@ -1,9 +1,11 @@
 use crate::event::{Axis, Direction, Event, EventBatch, KeyKind};
 use crate::glue::{self, input_event, libevdev, libevdev_uinput, timeval};
 
+use std::ffi::{CStr, OsStr};
 use std::fs::{File, OpenOptions};
 use std::io::Error;
 use std::mem::MaybeUninit;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -109,6 +111,24 @@ impl EventReader {
 
         let uinput_handle = unsafe { uinput_handle.assume_init() };
         let uinput_handle = NonNull::new(uinput_handle).unwrap();
+
+        let uinput_path = unsafe { glue::libevdev_uinput_get_devnode(uinput_handle.as_ptr()) };
+        let uinput_path = unsafe {
+            CStr::from_ptr(if uinput_path.is_null() {
+                "<unknown>".as_ptr() as *const _
+            } else {
+                uinput_path
+            })
+        };
+
+        let uinput_path = OsStr::from_bytes(uinput_path.to_bytes());
+        let uinput_path = Path::new(uinput_path);
+
+        log::info!(
+            "Registered helper for {} at {}",
+            path.display(),
+            uinput_path.display()
+        );
 
         Ok(Self {
             evdev_file,

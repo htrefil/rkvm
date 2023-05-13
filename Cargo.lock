@@ -792,6 +792,7 @@ dependencies = [
  "futures",
  "inotify",
  "libc",
+ "log",
  "pkg-config",
  "serde",
  "smallvec",
