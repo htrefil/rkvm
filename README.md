@@ -8,7 +8,7 @@ Switching between different clients is done by a configurable keyboard shortcut.
 
 ## Features
 - TLS encrypted by default, backed by [rustls](https://github.com/rustls/rustls)
-- Display server agnostic
+- Display server agnostic (in fact, it doesn't require a display server at all)
 - Low overhead
 
 ## Requirements
@@ -33,8 +33,8 @@ $ sudo cp systemd/rkvm-server.service /usr/lib/systemd/system/
 After installation:
 - Generate a certificate and private key using the `rkvm-certificate-gen` tool or provide your own from other sources.
 - For server, place both the certificate and private key in `/etc/rkvm/certificate.pem` and `/etc/rkvm/key.pem` respectively.
-- For client, place the certificate to `/etc/rkvm/certificate.pem`
-- Create a config if you haven't done so already.
+- For client, place the certificate to `/etc/rkvm/certificate.pem`.
+- Create a config if you haven't done so already.  
   Server:  
   ```
   # cp /etc/rkvm/server.example.toml /etc/rkvm/server.toml
@@ -44,8 +44,16 @@ After installation:
   # cp /etc/rkvm/client.example.toml /etc/rkvm/client.toml
   ```
   Do not edit the example configs, they will be overwritten by your package manager.
-- **Change the password** and optionally reconfigure the network listen address and key bindings for switching clients
-- Enable and start the systemd service.
+- **Change the password** and optionally reconfigure the network listen address and key bindings for switching clients  
+- Since rkvm-server grabs all input, i's a good idea to do a test run first to make sure you won't end up
+  being unable to user your keyboard and/or mouse because your display server is not properly configured to receive input from rkvm.
+
+  Run the following command to start rkvm-server for 15 seconds to test that your keyboard, mouse, etc. works properly:
+  ```
+  # rkvm-server /etc/rkvm/server.toml --shutdown-after 15
+  ```
+
+- Enable and start the systemd service.  
   Server:
   ```
   # systemctl enable rkvm-server
