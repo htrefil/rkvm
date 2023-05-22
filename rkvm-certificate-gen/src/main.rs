@@ -30,6 +30,13 @@ struct Args {
         help = "List of IP addresses to be used, can be empty if at least one DNS name is provided"
     )]
     ip_addresses: Vec<IpAddr>,
+    #[clap(
+        long,
+        short = 'D',
+        help = "How many days should this certificate be valid for",
+        default_value = "365"
+    )]
+    days: u32,
 }
 
 fn main() -> ExitCode {
@@ -110,6 +117,8 @@ subjectAltName = @alt_names
         .arg(certificate)
         .arg("-config")
         .arg(file.path())
+        .arg("-days")
+        .arg("3650")
         .status()?;
 
     if !status.success() {
