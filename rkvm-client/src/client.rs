@@ -1,7 +1,10 @@
-use rkvm_input::{EventBatch, EventWriter};
+use rkvm_input::writer::Writer;
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
+use rkvm_net::Update;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::io;
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufStream};
@@ -80,17 +83,80 @@ pub async fn run(
 
     log::info!("Authenticated successfully");
 
-    let mut writer = EventWriter::new().await.map_err(Error::Input)?;
-    loop {
-        let events = EventBatch::decode(&mut stream)
-            .await
-            .map_err(Error::Network)?;
-        writer.write(&events).await.map_err(Error::Input)?;
+    let mut writers = HashMap::new();
 
-        log::trace!(
-            "Wrote {} event{}",
-            events.len(),
-            if events.len() == 1 { "" } else { "s" }
-        );
+    loop {
+        match Update::decode(&mut stream).await.map_err(Error::Network)? {
+            Update::CreateDevice {
+                id,
+                name,
+                vendor,
+                product,
+                version,
+                rel,
+                abs,
+                keys,
+            } => {
+                let entry = writers.entry(id);
+                if let Entry::Occupied(_) = entry {
+                    return Err(Error::Network(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Server created the same device twice",
+                    )));
+                }
+
+                let writer = async {
+                    Writer::builder()?
+                        .name(&name)
+                        .vendor(vendor)
+                        .product(product)
+                        .version(version)
+                        .rel(rel)?
+                        .abs(abs)?
+                        .key(keys)?
+                        .build()
+                }
+                .await
+                .map_err(Error::Input)?;
+
+                entry.or_insert(writer);
+
+                log::info!(
+                    "Created new device {} (name {:?}, vendor {}, product {}, version {})",
+                    id,
+                    name,
+                    vendor,
+                    product,
+                    version
+                );
+            }
+            Update::DestroyDevice { id } => {
+                if writers.remove(&id).is_none() {
+                    return Err(Error::Network(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Server destroyed a nonexistent device",
+                    )));
+                }
+
+                log::info!("Destroyed device {}", id);
+            }
+            Update::EventBatch { id, events } => {
+                let writer = writers.get_mut(&id).ok_or_else(|| {
+                    Error::Network(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Server sent events to a nonexistent device",
+                    ))
+                })?;
+
+                writer.write(&events).await.map_err(Error::Input)?;
+
+                log::trace!(
+                    "Wrote {} event{} to device {}",
+                    events.len(),
+                    if events.len() == 1 { "" } else { "s" },
+                    id
+                );
+            }
+        }
     }
 }

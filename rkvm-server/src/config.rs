@@ -1,4 +1,4 @@
-use rkvm_input::Key;
+use rkvm_input::key::Keyboard;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -11,5 +11,5 @@ pub struct Config {
     pub certificate: PathBuf,
     pub key: PathBuf,
     pub password: String,
-    pub switch_keys: HashSet<Key>,
+    pub switch_keys: HashSet<Keyboard>,
 }

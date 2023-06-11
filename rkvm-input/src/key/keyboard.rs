@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum Key {
+pub enum Keyboard {
     A,
     Ab,
     AddressBook,
@@ -492,9 +492,9 @@ pub enum Key {
     ZoomReset,
 }
 
-impl Key {
-    pub(crate) fn to_raw(&self) -> u32 {
-        use Key::*;
+impl Keyboard {
+    pub(crate) fn to_raw(&self) -> u16 {
+        use self::Keyboard::*;
 
         match *self {
             A => 0x001E,
@@ -988,8 +988,8 @@ impl Key {
         }
     }
 
-    pub(crate) fn from_raw(code: u32) -> Option<Self> {
-        use Key::*;
+    pub(crate) fn from_raw(code: u16) -> Option<Self> {
+        use self::Keyboard::*;
 
         // This is generated from linux headers, some patterns are unreachable, and we don't care.
         #[allow(unreachable_patterns)]
