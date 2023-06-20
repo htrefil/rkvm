@@ -1,13 +1,14 @@
 use rkvm_input::abs::{AbsAxis, AbsInfo};
+use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent, Keyboard};
+use rkvm_input::monitor::Monitor;
 use rkvm_input::rel::RelAxis;
-use rkvm_input::{Event, Interceptor, Monitor, Packet};
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
 use rkvm_net::Update;
 use slab::Slab;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
 use std::io::{self, ErrorKind};
 use std::net::SocketAddr;
@@ -15,6 +16,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufStream};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time;
 use tokio_rustls::TlsAcceptor;
@@ -25,6 +27,8 @@ pub enum Error {
     Network(io::Error),
     #[error("Input error: {0}")]
     Input(io::Error),
+    #[error("Event queue overflow")]
+    Overflow,
 }
 
 pub async fn run(
@@ -59,9 +63,9 @@ pub async fn run(
                     current = 0;
                 }
 
-                let (sender, receiver) = mpsc::channel(devices.len());
-                for (id, device) in &devices {
-                    let update = Update::CreateDevice {
+                let init_updates = devices
+                    .iter()
+                    .map(|(id, device)| Update::CreateDevice {
                         id,
                         name: device.name.clone(),
                         version: device.version,
@@ -70,17 +74,16 @@ pub async fn run(
                         rel: device.rel.clone(),
                         abs: device.abs.clone(),
                         keys: device.keys.clone(),
-                    };
+                    })
+                    .collect();
 
-                    sender.try_send(update).unwrap();
-                }
-
+                let (sender, receiver) = mpsc::channel(1);
                 clients.insert(sender);
 
                 tokio::spawn(async move {
                     log::info!("{}: Connected", addr);
 
-                    match client(receiver, stream, addr, acceptor, &password).await {
+                    match client(init_updates, receiver, stream, addr, acceptor, &password).await {
                         Ok(()) => log::info!("{}: Disconnected", addr),
                         Err(err) => log::error!("{}: Disconnected: {}", addr, err),
                     }
@@ -113,7 +116,7 @@ pub async fn run(
                     let _ = sender.send(update).await;
                 }
 
-                let (interceptor_sender, mut interceptor_receiver) = mpsc::channel::<Packet>(1);
+                let (interceptor_sender, mut interceptor_receiver) = mpsc::channel(32);
                 devices.insert(Device {
                     name,
                     version,
@@ -129,18 +132,18 @@ pub async fn run(
                 tokio::spawn(async move {
                     loop {
                         tokio::select! {
-                            events = interceptor.read() => {
-                                if events.is_err() | events_sender.send((id, events)).await.is_err() {
+                            event = interceptor.read() => {
+                                if event.is_err() | events_sender.send((id, event)).await.is_err() {
                                     break;
                                 }
                             }
-                            events = interceptor_receiver.recv() => {
-                                let events = match events {
-                                    Some(events) => events,
+                            event = interceptor_receiver.recv() => {
+                                let event = match event {
+                                    Some(event) => event,
                                     None => break,
                                 };
 
-                                match interceptor.write(&events).await {
+                                match interceptor.write(&event).await {
                                     Ok(()) => {},
                                     Err(err) => {
                                         let _ = events_sender.send((id, Err(err))).await;
@@ -148,11 +151,7 @@ pub async fn run(
                                     }
                                 }
 
-                                log::trace!(
-                                    "Wrote {} event{}",
-                                    events.len(),
-                                    if events.len() == 1 { "" } else { "s" }
-                                );
+                                log::trace!("Wrote an event to device {}", id);
                             }
                         }
                     }
@@ -170,25 +169,18 @@ pub async fn run(
                 );
             }
             (id, result) = event => match result {
-                Ok(events) => {
+                Ok(event) => {
                     let mut changed = false;
 
-                    for event in &events {
-                        let (key, down) = match event {
-                            Event::Key(KeyEvent { key: Key::Key(key), down }) => (key, down),
-                            _ => continue,
-                        };
+                    if let Event::Key(KeyEvent { key: Key::Key(key), down }) = event {
+                        if switch_keys.contains(&key) {
+                            changed = true;
 
-                        if !switch_keys.contains(key) {
-                            continue;
+                            match down {
+                                true => pressed_keys.insert(key),
+                                false => pressed_keys.remove(&key),
+                            };
                         }
-
-                        changed = true;
-
-                        match down {
-                            true => pressed_keys.insert(*key),
-                            false => pressed_keys.remove(key),
-                        };
                     }
 
                     // Who to send this batch of events to.
@@ -202,14 +194,23 @@ pub async fn run(
                                 break;
                             }
                         }
+
+                        log::debug!("Switched to client {}", current);
                     }
 
+                    // Index 0 - special case to keep the modular arithmetic above working.
                     if idx == 0 {
-                        let _ = devices[id].sender.send(events).await;
-                        continue;
+                        // We do a try_send() here rather than a "blocking" send in order to prevent deadlocks.
+                        // In this scenario, the interceptor task is sending events to the main task,
+                        // while the main task is simultaneously sending events back to the interceptor.
+                        // This creates a classic deadlock situation where both tasks are waiting for each other.
+                        match devices[id].sender.try_send(event) {
+                            Ok(()) | Err(TrySendError::Closed(_)) => continue,
+                            Err(TrySendError::Full(_)) => return Err(Error::Overflow),
+                        }
                     }
 
-                    if clients[idx - 1].send(Update::EventBatch { id, events }).await.is_err() {
+                    if clients[idx - 1].send(Update::Event { id, event }).await.is_err() {
                         clients.remove(idx - 1);
 
                         if current == idx {
@@ -239,7 +240,7 @@ struct Device {
     rel: HashSet<RelAxis>,
     abs: HashMap<AbsAxis, AbsInfo>,
     keys: HashSet<Key>,
-    sender: Sender<Packet>,
+    sender: Sender<Event>,
 }
 
 #[derive(Error, Debug)]
@@ -255,6 +256,7 @@ enum ClientError {
 }
 
 async fn client(
+    mut init_updates: VecDeque<Update>,
     mut receiver: Receiver<Update>,
     stream: TcpStream,
     addr: SocketAddr,
@@ -308,9 +310,32 @@ async fn client(
         .await
         .map_err(|_| io::Error::new(ErrorKind::TimedOut, "Negotiation took too long"))??;
 
-    while let Some(update) = receiver.recv().await {
+    loop {
+        let recv = async {
+            match init_updates.pop_front() {
+                Some(update) => Some((update, false)),
+                None => receiver.recv().await.map(|update| (update, true)),
+            }
+        };
+
+        let (update, more) = match recv.await {
+            Some(update) => update,
+            None => break,
+        };
+
+        let mut count = 1;
+
         let write = async {
             update.encode(&mut stream).await?;
+
+            // Coalesce multiple updates into one chunk.
+            if more {
+                while let Ok(update) = receiver.try_recv() {
+                    update.encode(&mut stream).await?;
+                    count += 1;
+                }
+            }
+
             stream.flush().await
         };
 
@@ -318,7 +343,12 @@ async fn client(
             .await
             .map_err(|_| io::Error::new(ErrorKind::TimedOut, "Update writing took too long"))??;
 
-        log::trace!("{}: Wrote an update", addr);
+        log::trace!(
+            "{}: Wrote {} update{}",
+            addr,
+            count,
+            if count == 1 { "" } else { "s" }
+        );
     }
 
     Ok(())

@@ -2,17 +2,18 @@ mod caps;
 
 pub use caps::{AbsCaps, KeyCaps, RelCaps};
 
-use crate::abs::{AbsAxis, AbsEvent};
-use crate::event::{Event, Packet};
+use crate::abs::{AbsAxis, AbsEvent, ToolType};
+use crate::event::Event;
 use crate::glue::{self, libevdev};
 use crate::key::{Key, KeyEvent};
 use crate::rel::{RelAxis, RelEvent};
+use crate::sync::SyncEvent;
 use crate::writer::Writer;
 
+use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
-use std::mem;
 use std::mem::MaybeUninit;
 use std::os::fd::AsRawFd;
 use std::os::unix::prelude::OpenOptionsExt;
@@ -27,113 +28,82 @@ pub struct Interceptor {
     evdev: NonNull<libevdev>,
     writer: Writer,
     // The state of `read` is stored here to make it cancel safe.
-    events: Packet,
-    wrote: bool,
+    events: VecDeque<Event>,
+    writing: Option<(u16, u16, i32)>,
     dropped: bool,
-    writing: Option<Writing>,
 }
 
 impl Interceptor {
-    pub async fn read(&mut self) -> Result<Packet, Error> {
-        if let Some(writing) = self.writing {
-            let (r#type, code, value) = match writing {
-                Writing::Event {
-                    r#type,
-                    code,
-                    value,
-                } => (r#type, code, value),
-                Writing::Sync => (glue::EV_SYN as _, glue::SYN_REPORT as _, 0),
-            };
+    pub async fn read(&mut self) -> Result<Event, Error> {
+        if let Some((r#type, code, value)) = self.writing {
+            log::trace!("Resuming interrupted write");
 
             self.writer.write_raw(r#type, code, value).await?;
             self.writing = None;
         }
 
-        loop {
-            loop {
-                let (r#type, code, value) = self.read_raw().await?;
-                let event = match r#type as _ {
-                    glue::EV_REL if !self.dropped => {
-                        RelAxis::from_raw(code).map(|axis| Event::Rel(RelEvent { axis, value }))
+        while !matches!(self.events.back(), Some(Event::Sync(SyncEvent::All))) {
+            let (r#type, code, value) = self.read_raw().await?;
+            let event = match r#type as _ {
+                glue::EV_REL if !self.dropped => {
+                    RelAxis::from_raw(code).map(|axis| Event::Rel(RelEvent { axis, value }))
+                }
+                glue::EV_ABS if !self.dropped => match code as _ {
+                    glue::ABS_MT_TOOL_TYPE => {
+                        ToolType::from_raw(value).map(|value| AbsEvent::MtToolType { value })
                     }
-                    glue::EV_ABS if !self.dropped => {
-                        AbsAxis::from_raw(code).map(|axis| Event::Abs(AbsEvent { axis, value }))
-                    }
-                    glue::EV_KEY if !self.dropped && (value == 0 || value == 1) => {
-                        Key::from_raw(code).map(|key| {
-                            Event::Key(KeyEvent {
-                                key,
-                                down: value == 1,
-                            })
+                    glue::ABS_MT_BLOB_ID => Some(AbsEvent::MtBlobId { value }),
+                    _ => AbsAxis::from_raw(code).map(|axis| AbsEvent::Axis { axis, value }),
+                }
+                .map(Event::Abs),
+                glue::EV_KEY if !self.dropped && (value == 0 || value == 1) => Key::from_raw(code)
+                    .map(|key| {
+                        Event::Key(KeyEvent {
+                            key,
+                            down: value == 1,
                         })
-                    }
-                    glue::EV_SYN => match code as _ {
-                        glue::SYN_REPORT => {
-                            if self.dropped {
-                                self.dropped = false;
-                                continue;
-                            }
-
-                            break;
-                        }
-                        glue::SYN_DROPPED => {
-                            log::warn!(
-                                "Dropped {} event{}",
-                                self.events.len(),
-                                if self.events.len() == 1 { "" } else { "s" }
-                            );
-
-                            self.events.clear();
-                            self.dropped = true;
+                    }),
+                glue::EV_SYN => match code as _ {
+                    glue::SYN_REPORT => {
+                        if self.dropped {
+                            self.dropped = false;
                             continue;
                         }
-                        _ => continue,
-                    },
-                    _ => None,
-                };
 
-                if let Some(event) = event {
-                    self.events.push(event);
-                    continue;
-                }
+                        Some(Event::Sync(SyncEvent::All))
+                    }
+                    glue::SYN_DROPPED => {
+                        log::warn!(
+                            "Dropped {} event{}",
+                            self.events.len(),
+                            if self.events.len() == 1 { "" } else { "s" }
+                        );
 
-                log::trace!(
-                    "Writing back unknown event (type {}, code {}, value {})",
-                    r#type,
-                    code,
-                    value
-                );
+                        self.events.clear();
+                        self.dropped = true;
+                        continue;
+                    }
+                    glue::SYN_MT_REPORT if !self.dropped => Some(Event::Sync(SyncEvent::Mt)),
+                    _ => continue,
+                },
+                _ => None,
+            };
 
-                self.writing = Some(Writing::Event {
-                    r#type,
-                    code,
-                    value,
-                });
-                self.writer.write_raw(r#type, code, value).await?;
-                self.writing = None;
-                self.wrote = true;
+            if let Some(event) = event {
+                self.events.push_back(event);
+                continue;
             }
 
-            // Write an EV_SYN only if we actually wrote something back.
-            if self.wrote {
-                self.writing = Some(Writing::Sync);
-                self.writer
-                    .write_raw(glue::EV_SYN as _, glue::SYN_REPORT as _, 0)
-                    .await?;
-                self.writing = None;
-                self.wrote = false;
-            }
-
-            if !self.events.is_empty() {
-                return Ok(mem::take(&mut self.events));
-            }
-
-            // At this point, we received an EV_SYN, but no actual events useful to us, so try again.
+            self.writing = Some((r#type, code, value));
+            self.writer.write_raw(r#type, code, value).await?;
+            self.writing = None;
         }
+
+        Ok(self.events.pop_front().unwrap())
     }
 
-    pub async fn write(&mut self, events: &[Event]) -> Result<(), Error> {
-        self.writer.write(events).await
+    pub async fn write(&mut self, event: &Event) -> Result<(), Error> {
+        self.writer.write(event).await
     }
 
     pub fn name(&self) -> &CStr {
@@ -276,9 +246,7 @@ impl Interceptor {
             file,
             evdev,
             writer,
-
-            events: Packet::new(),
-            wrote: false,
+            events: VecDeque::new(),
             dropped: false,
             writing: None,
         })
@@ -294,12 +262,6 @@ impl Drop for Interceptor {
 }
 
 unsafe impl Send for Interceptor {}
-
-#[derive(Clone, Copy)]
-enum Writing {
-    Event { r#type: u16, code: u16, value: i32 },
-    Sync,
-}
 
 #[derive(Error, Debug)]
 pub(crate) enum OpenError {

@@ -2,25 +2,12 @@ use crate::glue;
 
 use serde::{Deserialize, Serialize};
 
-// #define ABS_MT_SLOT		0x2f	/* MT slot being modified */
-// #define ABS_MT_TOUCH_MAJOR	0x30	/* Major axis of touching ellipse */
-// #define ABS_MT_TOUCH_MINOR	0x31	/* Minor axis (omit if circular) */
-// #define ABS_MT_WIDTH_MAJOR	0x32	/* Major axis of approaching ellipse */
-// #define ABS_MT_WIDTH_MINOR	0x33	/* Minor axis (omit if circular) */
-// #define ABS_MT_ORIENTATION	0x34	/* Ellipse orientation */
-// #define ABS_MT_POSITION_X	0x35	/* Center X touch position */
-// #define ABS_MT_POSITION_Y	0x36	/* Center Y touch position */
-// #define ABS_MT_TOOL_TYPE	0x37	/* Type of touching device */
-// #define ABS_MT_BLOB_ID		0x38	/* Group a set of packets as a blob */
-// #define ABS_MT_TRACKING_ID	0x39	/* Unique ID of initiated contact */
-// #define ABS_MT_PRESSURE		0x3a	/* Pressure on contact area */
-// #define ABS_MT_DISTANCE		0x3b	/* Contact hover distance */
-// #define ABS_MT_TOOL_X		0x3c	/* Center X tool position */
-// #define ABS_MT_TOOL_Y		0x3d	/* Center Y tool position */
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct AbsEvent {
-    pub axis: AbsAxis,
-    pub value: i32,
+pub enum AbsEvent {
+    Axis { axis: AbsAxis, value: i32 },
+    MtToolType { value: ToolType },
+    // TODO: This might actually belong to the Axis variant.
+    MtBlobId { value: i32 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -52,6 +39,19 @@ pub enum AbsAxis {
     Volume,
     Profile,
     Misc,
+    MtSlot,
+    MtTouchMajor,
+    MtTouchMinor,
+    MtWidthMajor,
+    MtWidthMinor,
+    MtOrientation,
+    MtPositionX,
+    MtPositionY,
+    MtTrackingId,
+    MtPressure,
+    MtDistance,
+    MtToolX,
+    MtToolY,
 }
 
 impl AbsAxis {
@@ -84,6 +84,19 @@ impl AbsAxis {
             glue::ABS_VOLUME => Self::Volume,
             glue::ABS_PROFILE => Self::Profile,
             glue::ABS_MISC => Self::Misc,
+            glue::ABS_MT_SLOT => Self::MtSlot,
+            glue::ABS_MT_TOUCH_MAJOR => Self::MtTouchMajor,
+            glue::ABS_MT_TOUCH_MINOR => Self::MtTouchMinor,
+            glue::ABS_MT_WIDTH_MAJOR => Self::MtWidthMajor,
+            glue::ABS_MT_WIDTH_MINOR => Self::MtWidthMinor,
+            glue::ABS_MT_ORIENTATION => Self::MtOrientation,
+            glue::ABS_MT_POSITION_X => Self::MtPositionX,
+            glue::ABS_MT_POSITION_Y => Self::MtPositionY,
+            glue::ABS_MT_TRACKING_ID => Self::MtTrackingId,
+            glue::ABS_MT_PRESSURE => Self::MtPressure,
+            glue::ABS_MT_DISTANCE => Self::MtDistance,
+            glue::ABS_MT_TOOL_X => Self::MtToolX,
+            glue::ABS_MT_TOOL_Y => Self::MtToolY,
             _ => return None,
         };
 
@@ -119,6 +132,19 @@ impl AbsAxis {
             Self::Volume => glue::ABS_VOLUME,
             Self::Profile => glue::ABS_PROFILE,
             Self::Misc => glue::ABS_MISC,
+            Self::MtSlot => glue::ABS_MT_SLOT,
+            Self::MtTouchMajor => glue::ABS_MT_TOUCH_MAJOR,
+            Self::MtTouchMinor => glue::ABS_MT_TOUCH_MINOR,
+            Self::MtWidthMajor => glue::ABS_MT_WIDTH_MAJOR,
+            Self::MtWidthMinor => glue::ABS_MT_WIDTH_MINOR,
+            Self::MtOrientation => glue::ABS_MT_ORIENTATION,
+            Self::MtPositionX => glue::ABS_MT_POSITION_X,
+            Self::MtPositionY => glue::ABS_MT_POSITION_Y,
+            Self::MtTrackingId => glue::ABS_MT_TRACKING_ID,
+            Self::MtPressure => glue::ABS_MT_PRESSURE,
+            Self::MtDistance => glue::ABS_MT_DISTANCE,
+            Self::MtToolX => glue::ABS_MT_TOOL_X,
+            Self::MtToolY => glue::ABS_MT_TOOL_Y,
         };
 
         code as _
@@ -135,10 +161,35 @@ pub struct AbsInfo {
     pub resolution: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum ToolType {
     Finger,
     Pen,
     Palm,
     Dial,
+}
+
+impl ToolType {
+    pub(crate) fn from_raw(value: i32) -> Option<Self> {
+        let value = match value as _ {
+            glue::MT_TOOL_FINGER => Self::Finger,
+            glue::MT_TOOL_PEN => Self::Pen,
+            glue::MT_TOOL_PALM => Self::Palm,
+            glue::MT_TOOL_DIAL => Self::Dial,
+            _ => return None,
+        };
+
+        Some(value)
+    }
+
+    pub(crate) fn to_raw(&self) -> i32 {
+        let value = match self {
+            Self::Finger => glue::MT_TOOL_FINGER,
+            Self::Pen => glue::MT_TOOL_PEN,
+            Self::Palm => glue::MT_TOOL_PALM,
+            Self::Dial => glue::MT_TOOL_DIAL,
+        };
+
+        value as _
+    }
 }

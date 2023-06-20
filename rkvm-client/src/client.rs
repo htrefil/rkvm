@@ -140,22 +140,17 @@ pub async fn run(
 
                 log::info!("Destroyed device {}", id);
             }
-            Update::EventBatch { id, events } => {
+            Update::Event { id, event } => {
                 let writer = writers.get_mut(&id).ok_or_else(|| {
                     Error::Network(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        "Server sent events to a nonexistent device",
+                        "Server sent an event to a nonexistent device",
                     ))
                 })?;
 
-                writer.write(&events).await.map_err(Error::Input)?;
+                writer.write(&event).await.map_err(Error::Input)?;
 
-                log::trace!(
-                    "Wrote {} event{} to device {}",
-                    events.len(),
-                    if events.len() == 1 { "" } else { "s" },
-                    id
-                );
+                log::trace!("Wrote an event to device {}", id);
             }
         }
     }

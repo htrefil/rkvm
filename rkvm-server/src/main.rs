@@ -9,9 +9,7 @@ use std::future;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
-use tokio::fs;
-use tokio::signal;
-use tokio::time;
+use tokio::{fs, signal, time};
 
 #[derive(Parser)]
 #[structopt(name = "rkvm-server", about = "The rkvm server application")]

@@ -1,7 +1,6 @@
 use hmac::{Hmac, Mac};
 use rand::rngs::OsRng;
-use rand::Error;
-use rand::Rng;
+use rand::{Error, Rng};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tokio::task;

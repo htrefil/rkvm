@@ -1,7 +1,7 @@
 use crate::abs::{AbsAxis, AbsEvent, AbsInfo};
 use crate::event::Event;
 use crate::glue::{self, input_absinfo, libevdev, libevdev_uinput};
-use crate::key::{Key, KeyEvent, Keyboard};
+use crate::key::{Key, KeyEvent};
 use crate::rel::{RelAxis, RelEvent};
 
 use std::ffi::{CStr, OsStr};
@@ -12,8 +12,8 @@ use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
+use std::ptr;
 use std::ptr::NonNull;
-use std::{iter, ptr};
 use tokio::io::unix::AsyncFd;
 
 pub struct Writer {
@@ -26,20 +26,21 @@ impl Writer {
         WriterBuilder::new()
     }
 
-    pub async fn write(&mut self, events: &[Event]) -> Result<(), Error> {
-        let events = events
-            .iter()
-            .map(|event| match event {
-                Event::Rel(RelEvent { axis, value }) => (glue::EV_REL, axis.to_raw(), *value),
-                Event::Abs(AbsEvent { axis, value }) => (glue::EV_ABS, axis.to_raw(), *value),
-                Event::Key(KeyEvent { down, key }) => (glue::EV_KEY, key.to_raw(), *down as _),
-            })
-            .chain(iter::once((glue::EV_SYN, glue::SYN_REPORT as _, 0)));
+    pub async fn write(&mut self, event: &Event) -> Result<(), Error> {
+        let (r#type, code, value) = match event {
+            Event::Rel(RelEvent { axis, value }) => (glue::EV_REL, axis.to_raw(), *value),
+            Event::Abs(event) => match event {
+                AbsEvent::Axis { axis, value } => (glue::EV_ABS, axis.to_raw(), *value),
+                AbsEvent::MtToolType { value } => {
+                    (glue::EV_ABS, glue::ABS_MT_TOOL_TYPE as _, value.to_raw())
+                }
+                AbsEvent::MtBlobId { value } => (glue::EV_ABS, glue::ABS_MT_BLOB_ID as _, *value),
+            },
+            Event::Key(KeyEvent { down, key }) => (glue::EV_KEY, key.to_raw(), *down as _),
+            Event::Sync(event) => (glue::EV_SYN, event.to_raw(), 0),
+        };
 
-        for (r#type, code, value) in events {
-            self.write_raw(r#type as _, code, value).await?;
-        }
-
+        self.write_raw(r#type as _, code, value).await?;
         Ok(())
     }
 
@@ -184,6 +185,19 @@ impl WriterBuilder {
         &mut self,
         items: T,
     ) -> Result<&mut Self, Error> {
+        let ret = unsafe {
+            glue::libevdev_enable_event_code(
+                self.evdev.as_ptr(),
+                glue::EV_SYN,
+                glue::SYN_MT_REPORT,
+                ptr::null(),
+            )
+        };
+
+        if ret < 0 {
+            return Err(Error::from_raw_os_error(-ret));
+        }
+
         for (axis, info) in items {
             let info = input_absinfo {
                 value: info.min,

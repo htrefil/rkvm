@@ -7,8 +7,7 @@ use config::Config;
 use log::LevelFilter;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use tokio::fs;
-use tokio::signal;
+use tokio::{fs, signal};
 
 #[derive(Parser)]
 #[structopt(name = "rkvm-client", about = "The rkvm client application")]

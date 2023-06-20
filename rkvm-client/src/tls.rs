@@ -1,5 +1,6 @@
+use std::io;
+use std::path::Path;
 use std::sync::Arc;
-use std::{io, path::Path};
 use thiserror::Error;
 use tokio::fs;
 use tokio_rustls::rustls::{self, Certificate, ClientConfig, RootCertStore};
