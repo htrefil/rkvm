@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 pub enum AbsEvent {
     Axis { axis: AbsAxis, value: i32 },
     MtToolType { value: ToolType },
-    // TODO: This might actually belong to the Axis variant.
-    MtBlobId { value: i32 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -47,6 +45,7 @@ pub enum AbsAxis {
     MtOrientation,
     MtPositionX,
     MtPositionY,
+    MtBlobId,
     MtTrackingId,
     MtPressure,
     MtDistance,
@@ -92,6 +91,7 @@ impl AbsAxis {
             glue::ABS_MT_ORIENTATION => Self::MtOrientation,
             glue::ABS_MT_POSITION_X => Self::MtPositionX,
             glue::ABS_MT_POSITION_Y => Self::MtPositionY,
+            glue::ABS_MT_BLOB_ID => Self::MtBlobId,
             glue::ABS_MT_TRACKING_ID => Self::MtTrackingId,
             glue::ABS_MT_PRESSURE => Self::MtPressure,
             glue::ABS_MT_DISTANCE => Self::MtDistance,
@@ -140,6 +140,7 @@ impl AbsAxis {
             Self::MtOrientation => glue::ABS_MT_ORIENTATION,
             Self::MtPositionX => glue::ABS_MT_POSITION_X,
             Self::MtPositionY => glue::ABS_MT_POSITION_Y,
+            Self::MtBlobId => glue::ABS_MT_BLOB_ID,
             Self::MtTrackingId => glue::ABS_MT_TRACKING_ID,
             Self::MtPressure => glue::ABS_MT_PRESSURE,
             Self::MtDistance => glue::ABS_MT_DISTANCE,

@@ -52,7 +52,6 @@ impl Interceptor {
                     glue::ABS_MT_TOOL_TYPE => {
                         ToolType::from_raw(value).map(|value| AbsEvent::MtToolType { value })
                     }
-                    glue::ABS_MT_BLOB_ID => Some(AbsEvent::MtBlobId { value }),
                     _ => AbsAxis::from_raw(code).map(|axis| AbsEvent::Axis { axis, value }),
                 }
                 .map(Event::Abs),

@@ -34,7 +34,6 @@ impl Writer {
                 AbsEvent::MtToolType { value } => {
                     (glue::EV_ABS, glue::ABS_MT_TOOL_TYPE as _, value.to_raw())
                 }
-                AbsEvent::MtBlobId { value } => (glue::EV_ABS, glue::ABS_MT_BLOB_ID as _, *value),
             },
             Event::Key(KeyEvent { down, key }) => (glue::EV_KEY, key.to_raw(), *down as _),
             Event::Sync(event) => (glue::EV_SYN, event.to_raw(), 0),
