@@ -113,6 +113,14 @@ impl Writer {
     }
 }
 
+impl Drop for Writer {
+    fn drop(&mut self) {
+        unsafe {
+            glue::libevdev_uinput_destroy(self.uinput.as_ptr());
+        }
+    }
+}
+
 unsafe impl Send for Writer {}
 
 pub struct WriterBuilder {
