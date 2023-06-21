@@ -115,6 +115,7 @@ pub async fn run(
                         .abs(abs)?
                         .key(keys)?
                         .build()
+                        .await
                 }
                 .await
                 .map_err(Error::Input)?;

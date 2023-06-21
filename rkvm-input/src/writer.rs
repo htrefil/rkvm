@@ -15,6 +15,7 @@ use std::path::Path;
 use std::ptr;
 use std::ptr::NonNull;
 use tokio::io::unix::AsyncFd;
+use tokio::task;
 
 pub struct Writer {
     file: AsyncFd<File>,
@@ -112,6 +113,8 @@ impl Writer {
     }
 }
 
+unsafe impl Send for Writer {}
+
 pub struct WriterBuilder {
     evdev: NonNull<libevdev>,
 }
@@ -129,7 +132,7 @@ impl WriterBuilder {
         Ok(Self { evdev })
     }
 
-    pub fn name(&mut self, name: &CStr) -> &mut Self {
+    pub fn name(self, name: &CStr) -> Self {
         unsafe {
             glue::libevdev_set_name(self.evdev.as_ptr(), name.as_ptr());
         }
@@ -137,7 +140,7 @@ impl WriterBuilder {
         self
     }
 
-    pub fn vendor(&mut self, value: u16) -> &mut Self {
+    pub fn vendor(self, value: u16) -> Self {
         unsafe {
             glue::libevdev_set_id_vendor(self.evdev.as_ptr(), value as _);
         }
@@ -145,7 +148,7 @@ impl WriterBuilder {
         self
     }
 
-    pub fn product(&mut self, value: u16) -> &mut Self {
+    pub fn product(self, value: u16) -> Self {
         unsafe {
             glue::libevdev_set_id_product(self.evdev.as_ptr(), value as _);
         }
@@ -153,7 +156,7 @@ impl WriterBuilder {
         self
     }
 
-    pub fn version(&mut self, value: u16) -> &mut Self {
+    pub fn version(self, value: u16) -> Self {
         unsafe {
             glue::libevdev_set_id_version(self.evdev.as_ptr(), value as _);
         }
@@ -161,7 +164,7 @@ impl WriterBuilder {
         self
     }
 
-    pub fn rel<T: IntoIterator<Item = RelAxis>>(&mut self, items: T) -> Result<&mut Self, Error> {
+    pub fn rel<T: IntoIterator<Item = RelAxis>>(self, items: T) -> Result<Self, Error> {
         for axis in items {
             let ret = unsafe {
                 glue::libevdev_enable_event_code(
@@ -180,10 +183,7 @@ impl WriterBuilder {
         Ok(self)
     }
 
-    pub fn abs<T: IntoIterator<Item = (AbsAxis, AbsInfo)>>(
-        &mut self,
-        items: T,
-    ) -> Result<&mut Self, Error> {
+    pub fn abs<T: IntoIterator<Item = (AbsAxis, AbsInfo)>>(self, items: T) -> Result<Self, Error> {
         let ret = unsafe {
             glue::libevdev_enable_event_code(
                 self.evdev.as_ptr(),
@@ -224,7 +224,7 @@ impl WriterBuilder {
         Ok(self)
     }
 
-    pub fn key<T: IntoIterator<Item = Key>>(&mut self, items: T) -> Result<&mut Self, Error> {
+    pub fn key<T: IntoIterator<Item = Key>>(self, items: T) -> Result<Self, Error> {
         for key in items {
             let ret = unsafe {
                 glue::libevdev_enable_event_code(
@@ -243,12 +243,12 @@ impl WriterBuilder {
         Ok(self)
     }
 
-    pub fn build(&self) -> Result<Writer, Error> {
-        unsafe { Writer::from_evdev(self.evdev.as_ref()) }
+    pub async fn build(self) -> Result<Writer, Error> {
+        task::spawn_blocking(move || unsafe { Writer::from_evdev(self.evdev.as_ref()) }).await?
     }
 }
 
-unsafe impl Send for Writer {}
+unsafe impl Send for WriterBuilder {}
 
 impl Drop for WriterBuilder {
     fn drop(&mut self) {
