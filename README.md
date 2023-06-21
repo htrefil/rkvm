@@ -22,11 +22,11 @@ If you can, it is strongly recommended to use the [AUR package](https://aur.arch
 
 ```
 $ cargo build --release
-$ sudo cp target/release/rkvm-client /usr/bin/
-$ sudo cp target/release/rkvm-server /usr/bin/
-$ sudo cp target/release/rkvm-certificate-gen /usr/bin/ # Optional
-$ sudo cp systemd/rkvm-client.service /usr/lib/systemd/system/
-$ sudo cp systemd/rkvm-server.service /usr/lib/systemd/system/
+# cp target/release/rkvm-client /usr/bin/
+# cp target/release/rkvm-server /usr/bin/
+# cp target/release/rkvm-certificate-gen /usr/bin/ # Optional
+# cp systemd/rkvm-client.service /usr/lib/systemd/system/
+# cp systemd/rkvm-server.service /usr/lib/systemd/system/
 ```
 
 ## Configuration
@@ -37,11 +37,11 @@ After installation:
 - Create a config if you haven't done so already.  
   Server:  
   ```
-  # cp /etc/rkvm/server.example.toml /etc/rkvm/server.toml
+  # cp /usr/share/rkvm/examples/server.toml /etc/rkvm/server.toml
   ```
   Client:
   ```
-  # cp /etc/rkvm/client.example.toml /etc/rkvm/client.toml
+  # cp /usr/share/rkvm/examples/client.toml /etc/rkvm/client.toml
   ```
   Do not edit the example configs, they will be overwritten by your package manager.
 - **Change the password** and optionally reconfigure the network listen address and key bindings for switching clients  
@@ -73,7 +73,6 @@ Additionally, rkvm doesn't even know or care about X, Wayland or any display ser
 Regardless, if you want a working and stable solution for crossplatform keyboard and mouse sharing, you should probably use either of the above mentioned programs for the time being.
 
 ## Limitations
-- Only keyboard and relative mouse events work (no support for touchpads or other absolutely positioned devices)
 - Linux only
 
 ## Project structure
