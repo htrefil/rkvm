@@ -19,3 +19,6 @@ thiserror = "1.0.40"
 [build-dependencies]
 bindgen = "0.65.1"
 pkg-config = "0.3.19"
+
+[lib]
+doctest = false
