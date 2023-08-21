@@ -3,9 +3,11 @@ use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
 use rkvm_net::Update;
+use socket2::{SockRef, TcpKeepalive};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::io;
+use std::time::Duration;
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufStream};
 use tokio::net::TcpStream;
@@ -42,6 +44,15 @@ pub async fn run(
 
     stream.set_linger(None).map_err(Error::Network)?;
     stream.set_nodelay(false).map_err(Error::Network)?;
+
+    SockRef::from(&stream)
+        .set_tcp_keepalive(
+            &TcpKeepalive::new()
+                .with_time(Duration::from_secs(1))
+                .with_interval(Duration::from_secs(10))
+                .with_retries(1),
+        )
+        .map_err(Error::Network)?;
 
     log::info!("Connected to server");
 

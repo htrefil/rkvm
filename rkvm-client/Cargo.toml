@@ -19,6 +19,7 @@ clap = { version = "4.2.2", features = ["derive"] }
 thiserror = "1.0.40"
 tokio-rustls = "0.24.0"
 rustls-pemfile = "1.0.2"
+socket2 = { version = "0.5.3", features = ["all"] }
 
 [package.metadata.rpm]
 package = "rkvm-client"

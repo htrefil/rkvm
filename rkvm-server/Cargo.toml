@@ -21,6 +21,7 @@ rustls-pemfile = "1.0.2"
 thiserror = "1.0.40"
 slab = "0.4.8"
 rand = "0.8.5"
+socket2 = { version = "0.5.3", features = ["all"] }
 
 [package.metadata.rpm]
 package = "rkvm-server"
