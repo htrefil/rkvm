@@ -3,6 +3,7 @@ use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent, Keyboard};
 use rkvm_input::monitor::Monitor;
 use rkvm_input::rel::RelAxis;
+use rkvm_input::sync::SyncEvent;
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
@@ -44,6 +45,8 @@ pub async fn run(
     let mut devices = Slab::<Device>::new();
     let mut clients = Slab::new();
     let mut current = 0;
+    let mut previous = 0;
+    let mut changed = false;
     let mut pressed_keys = HashSet::new();
 
     let (events_sender, mut events_receiver) = mpsc::channel(1);
@@ -170,11 +173,11 @@ pub async fn run(
             }
             (id, result) = event => match result {
                 Ok(event) => {
-                    let mut changed = false;
+                    let mut press = false;
 
                     if let Event::Key(KeyEvent { key: Key::Key(key), down }) = event {
                         if switch_keys.contains(&key) {
-                            changed = true;
+                            press = true;
 
                             match down {
                                 true => pressed_keys.insert(key),
@@ -183,20 +186,35 @@ pub async fn run(
                         }
                     }
 
-                    // Who to send this batch of events to.
-                    let idx = current;
+                    // Who to send this event to.
+                    let mut idx = current;
 
-                    if changed && pressed_keys.len() == switch_keys.len() {
-                        let exists = |idx| idx == 0 || clients.contains(idx - 1);
-                        loop {
-                            current = (current + 1) % (clients.len() + 1);
-                            if exists(current) {
-                                break;
+                    if press {
+                        if pressed_keys.len() == switch_keys.len() {
+                            let exists = |idx| idx == 0 || clients.contains(idx - 1);
+                            loop {
+                                current = (current + 1) % (clients.len() + 1);
+                                if exists(current) {
+                                    break;
+                                }
+                            }
+
+                            previous = idx;
+                            changed = true;
+
+                            log::debug!("Switched to client {}", current);
+                        } else if changed {
+                            idx = previous;
+
+                            if pressed_keys.is_empty() {
+                                changed = false;
                             }
                         }
-
-                        log::debug!("Switched to client {}", current);
                     }
+
+                    let events = [event]
+                        .into_iter()
+                        .chain(press.then_some(Event::Sync(SyncEvent::All)));
 
                     // Index 0 - special case to keep the modular arithmetic above working.
                     if idx == 0 {
@@ -204,17 +222,23 @@ pub async fn run(
                         // In this scenario, the interceptor task is sending events to the main task,
                         // while the main task is simultaneously sending events back to the interceptor.
                         // This creates a classic deadlock situation where both tasks are waiting for each other.
-                        match devices[id].sender.try_send(event) {
-                            Ok(()) | Err(TrySendError::Closed(_)) => continue,
-                            Err(TrySendError::Full(_)) => return Err(Error::Overflow),
+                        for event in events {
+                            match devices[id].sender.try_send(event) {
+                                Ok(()) | Err(TrySendError::Closed(_)) => {},
+                                Err(TrySendError::Full(_)) => return Err(Error::Overflow),
+                            }
                         }
+
+                        continue;
                     }
 
-                    if clients[idx - 1].send(Update::Event { id, event }).await.is_err() {
-                        clients.remove(idx - 1);
+                    for event in events {
+                        if clients[idx - 1].send(Update::Event { id, event }).await.is_err() {
+                            clients.remove(idx - 1);
 
-                        if current == idx {
-                            current = 0;
+                            if current == idx {
+                                current = 0;
+                            }
                         }
                     }
                 }
@@ -319,7 +343,7 @@ async fn client(
         };
 
         let (update, more) = match recv.await {
-            Some(update) => update,
+            Some(um) => um,
             None => break,
         };
 
@@ -328,7 +352,7 @@ async fn client(
         let write = async {
             update.encode(&mut stream).await?;
 
-            // Coalesce multiple updates into one chunk.
+            // Coalesce multiple consecutive updates into one chunk.
             if more {
                 while let Ok(update) = receiver.try_recv() {
                     update.encode(&mut stream).await?;

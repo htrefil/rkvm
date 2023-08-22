@@ -3,7 +3,7 @@ name = "rkvm-server"
 license = "MIT"
 version = "0.3.3"
 authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
