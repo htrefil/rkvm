@@ -60,8 +60,10 @@ async fn main() -> ExitCode {
         }
     };
 
+    let switch_keys = config.switch_keys.into_iter().map(Into::into).collect();
+
     tokio::select! {
-        result = server::run(config.listen, acceptor, &config.password, &config.switch_keys) => {
+        result = server::run(config.listen, acceptor, &config.password, &switch_keys) => {
             if let Err(err) = result {
                 log::error!("Error: {}", err);
                 return ExitCode::FAILURE;

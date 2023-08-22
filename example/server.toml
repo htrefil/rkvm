@@ -1,5 +1,6 @@
 listen = "0.0.0.0:5258"
-switch-keys = ["LeftAlt", "LeftCtrl"]
+# See `switch-keys.md` in the repository root for the list of all possible keys.
+switch-keys = ["left-alt", "left-ctrl"]
 certificate = "/etc/rkvm/certificate.pem"
 key = "/etc/rkvm/key.pem"
 

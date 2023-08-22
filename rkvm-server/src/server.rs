@@ -1,6 +1,6 @@
 use rkvm_input::abs::{AbsAxis, AbsInfo};
 use rkvm_input::event::Event;
-use rkvm_input::key::{Key, KeyEvent, Keyboard};
+use rkvm_input::key::{Key, KeyEvent};
 use rkvm_input::monitor::Monitor;
 use rkvm_input::rel::RelAxis;
 use rkvm_input::sync::SyncEvent;
@@ -36,7 +36,7 @@ pub async fn run(
     listen: SocketAddr,
     acceptor: TlsAcceptor,
     password: &str,
-    switch_keys: &HashSet<Keyboard>,
+    switch_keys: &HashSet<Key>,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     log::info!("Listening on {}", listen);
@@ -175,7 +175,7 @@ pub async fn run(
                 Ok(event) => {
                     let mut press = false;
 
-                    if let Event::Key(KeyEvent { key: Key::Key(key), down }) = event {
+                    if let Event::Key(KeyEvent { key, down }) = event {
                         if switch_keys.contains(&key) {
                             press = true;
 
