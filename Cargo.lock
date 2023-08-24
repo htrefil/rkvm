@@ -778,7 +778,6 @@ dependencies = [
  "rkvm-net",
  "rustls-pemfile",
  "serde",
- "socket2 0.5.3",
  "thiserror",
  "tokio",
  "tokio-rustls",
@@ -813,6 +812,7 @@ dependencies = [
  "rkvm-input",
  "serde",
  "sha2",
+ "socket2 0.5.3",
  "thiserror",
  "tokio",
 ]
@@ -830,7 +830,6 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "slab",
- "socket2 0.5.3",
  "thiserror",
  "tokio",
  "tokio-rustls",
