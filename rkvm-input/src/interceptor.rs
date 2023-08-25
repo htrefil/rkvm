@@ -214,6 +214,40 @@ impl Interceptor {
             return Err(OpenError::NotAppliable);
         }
 
+        // Some buggy kernels can report nonsense abs info, so check for it and disable the axes.
+        for i in 0..glue::ABS_CNT {
+            let abs_info = unsafe { glue::libevdev_get_abs_info(evdev.as_ptr(), i).as_ref() };
+            let abs_info = match abs_info {
+                Some(abs_info) => abs_info,
+                None => continue,
+            };
+
+            // See Linux source at drivers/input/misc/uinput.c#L408 commit 93f5de5f648d2b1ce3540a4ac71756d4a852dc23.
+
+            let min = abs_info.minimum;
+            let max = abs_info.maximum;
+
+            if min != 0 || max != 0 && max < min {
+                log::warn!(
+                    "Detected nonsense min ({}) and max ({}) values for absolute axis {}, disabling it",
+                    min,
+                    max,
+                    i
+                );
+
+                let ret =
+                    unsafe { glue::libevdev_disable_event_code(evdev.as_ptr(), glue::EV_ABS, i) };
+
+                if ret < 0 {
+                    unsafe {
+                        glue::libevdev_free(evdev.as_ptr());
+                    }
+
+                    return Err(Error::from_raw_os_error(-ret).into());
+                }
+            }
+        }
+
         unsafe {
             glue::libevdev_set_id_bustype(evdev.as_ptr(), glue::BUS_VIRTUAL as _);
         }
