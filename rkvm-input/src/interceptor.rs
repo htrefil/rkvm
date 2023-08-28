@@ -227,7 +227,7 @@ impl Interceptor {
             let min = abs_info.minimum;
             let max = abs_info.maximum;
 
-            if min != 0 || max != 0 && max < min {
+            if (min != 0 || max != 0) && max < min {
                 log::warn!(
                     "Detected nonsense min ({}) and max ({}) values for absolute axis {}, disabling it",
                     min,
