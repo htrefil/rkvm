@@ -8,3 +8,4 @@ pub mod sync;
 pub mod writer;
 
 mod glue;
+mod registry;

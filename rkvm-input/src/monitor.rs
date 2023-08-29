@@ -1,4 +1,5 @@
 use crate::interceptor::{Interceptor, OpenError};
+use crate::registry::Registry;
 
 use futures::StreamExt;
 use inotify::{Inotify, WatchMask};
@@ -20,6 +21,8 @@ impl Monitor {
 
         tokio::spawn(async move {
             let run = async {
+                let registry = Registry::new();
+
                 let mut read_dir = fs::read_dir(EVENT_PATH).await?;
 
                 let mut inotify = Inotify::init()?;
@@ -54,7 +57,7 @@ impl Monitor {
                         continue;
                     }
 
-                    let interceptor = match Interceptor::open(&path).await {
+                    let interceptor = match Interceptor::open(&path, &registry).await {
                         Ok(interceptor) => interceptor,
                         Err(OpenError::Io(err)) => return Err(err),
                         Err(OpenError::NotAppliable) => continue,

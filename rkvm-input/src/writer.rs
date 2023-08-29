@@ -2,6 +2,7 @@ use crate::abs::{AbsAxis, AbsEvent, AbsInfo};
 use crate::event::Event;
 use crate::glue::{self, input_absinfo, libevdev, libevdev_uinput};
 use crate::key::{Key, KeyEvent};
+use crate::registry::Entry;
 use crate::rel::{RelAxis, RelEvent};
 
 use std::ffi::{CStr, OsStr};
@@ -10,10 +11,11 @@ use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
-use std::ptr;
 use std::ptr::NonNull;
+use std::{fs, ptr};
 use tokio::io::unix::AsyncFd;
 use tokio::task;
 
@@ -44,17 +46,22 @@ impl Writer {
         Ok(())
     }
 
-    pub fn path(&self) -> Option<&Path> {
+    pub(crate) fn entry(&self) -> Result<Entry, Error> {
         let path = unsafe { glue::libevdev_uinput_get_devnode(self.uinput.as_ptr()) };
         if path.is_null() {
-            return None;
+            return Err(Error::new(ErrorKind::Other, "No syspath for device"));
         }
 
         let path = unsafe { CStr::from_ptr(path) };
         let path = OsStr::from_bytes(path.to_bytes());
         let path = Path::new(path);
 
-        Some(path)
+        let metadata = fs::metadata(path)?;
+
+        Ok(Entry {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        })
     }
 
     pub(crate) unsafe fn from_evdev(evdev: *const libevdev) -> Result<Self, Error> {

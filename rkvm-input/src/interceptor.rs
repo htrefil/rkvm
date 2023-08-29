@@ -6,6 +6,7 @@ use crate::abs::{AbsAxis, AbsEvent, ToolType};
 use crate::event::Event;
 use crate::glue::{self, libevdev};
 use crate::key::{Key, KeyEvent};
+use crate::registry::{Entry, Handle, Registry};
 use crate::rel::{RelAxis, RelEvent};
 use crate::sync::SyncEvent;
 use crate::writer::Writer;
@@ -16,6 +17,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
 use std::os::fd::AsRawFd;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
 use std::ptr::NonNull;
@@ -31,6 +33,9 @@ pub struct Interceptor {
     events: VecDeque<Event>,
     writing: Option<(u16, u16, i32)>,
     dropped: bool,
+
+    _reader_handle: Handle,
+    _writer_handle: Handle,
 }
 
 impl Interceptor {
@@ -173,19 +178,29 @@ impl Interceptor {
         }
     }
 
-    pub(crate) async fn open(path: &Path) -> Result<Self, OpenError> {
+    pub(crate) async fn open(path: &Path, registry: &Registry) -> Result<Self, OpenError> {
         let path = path.to_owned();
-        task::spawn_blocking(move || Self::open_sync(&path))
+        let registry = registry.clone();
+
+        task::spawn_blocking(move || Self::open_sync(&path, &registry))
             .await
             .map_err(|err| OpenError::Io(err.into()))?
     }
 
-    fn open_sync(path: &Path) -> Result<Self, OpenError> {
+    fn open_sync(path: &Path, registry: &Registry) -> Result<Self, OpenError> {
         let file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NONBLOCK)
             .open(path)
             .and_then(AsyncFd::new)?;
+
+        let metadata = file.get_ref().metadata()?;
+        let reader_handle = registry
+            .register(Entry {
+                device: metadata.dev(),
+                inode: metadata.ino(),
+            })
+            .ok_or(OpenError::NotAppliable)?;
 
         let mut evdev = MaybeUninit::uninit();
 
@@ -202,11 +217,7 @@ impl Interceptor {
         // state is in sync."
         // We have no way of knowing that.
         let sw = unsafe { glue::libevdev_has_event_type(evdev.as_ptr(), glue::EV_SW) };
-
-        // Check if we're not opening our own virtual device.
-        let bus_type = unsafe { glue::libevdev_get_id_bustype(evdev.as_ptr()) };
-
-        if bus_type == glue::BUS_VIRTUAL as _ || sw == 1 {
+        if sw == 1 {
             unsafe {
                 glue::libevdev_free(evdev.as_ptr());
             }
@@ -275,6 +286,20 @@ impl Interceptor {
             }
         };
 
+        // TODO: This is ugly. Need to refactor the evdev wrappers.
+        let entry = match writer.entry() {
+            Ok(entry) => entry,
+            Err(err) => {
+                unsafe {
+                    glue::libevdev_free(evdev.as_ptr());
+                }
+
+                return Err(err.into());
+            }
+        };
+
+        let writer_handle = registry.register(entry).unwrap();
+
         Ok(Self {
             file,
             evdev,
@@ -282,6 +307,9 @@ impl Interceptor {
             events: VecDeque::new(),
             dropped: false,
             writing: None,
+
+            _reader_handle: reader_handle,
+            _writer_handle: writer_handle,
         })
     }
 }
