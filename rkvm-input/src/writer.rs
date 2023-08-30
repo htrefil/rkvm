@@ -31,18 +31,23 @@ impl Writer {
 
     pub async fn write(&mut self, event: &Event) -> Result<(), Error> {
         let (r#type, code, value) = match event {
-            Event::Rel(RelEvent { axis, value }) => (glue::EV_REL, axis.to_raw(), *value),
+            Event::Rel(RelEvent { axis, value }) => (glue::EV_REL, Some(axis.to_raw()), *value),
             Event::Abs(event) => match event {
                 AbsEvent::Axis { axis, value } => (glue::EV_ABS, axis.to_raw(), *value),
-                AbsEvent::MtToolType { value } => {
-                    (glue::EV_ABS, glue::ABS_MT_TOOL_TYPE as _, value.to_raw())
-                }
+                AbsEvent::MtToolType { value } => (
+                    glue::EV_ABS,
+                    Some(glue::ABS_MT_TOOL_TYPE as _),
+                    value.to_raw(),
+                ),
             },
-            Event::Key(KeyEvent { down, key }) => (glue::EV_KEY, key.to_raw(), *down as _),
-            Event::Sync(event) => (glue::EV_SYN, event.to_raw(), 0),
+            Event::Key(KeyEvent { down, key }) => (glue::EV_KEY, Some(key.to_raw()), *down as _),
+            Event::Sync(event) => (glue::EV_SYN, Some(event.to_raw()), 0),
         };
 
-        self.write_raw(r#type as _, code, value).await?;
+        if let Some(code) = code {
+            self.write_raw(r#type as _, code, value).await?;
+        }
+
         Ok(())
     }
 
@@ -213,6 +218,11 @@ impl WriterBuilder {
         }
 
         for (axis, info) in items {
+            let code = match axis.to_raw() {
+                Some(code) => code,
+                None => continue,
+            };
+
             let info = input_absinfo {
                 value: info.min,
                 minimum: info.min,
@@ -226,7 +236,7 @@ impl WriterBuilder {
                 glue::libevdev_enable_event_code(
                     self.evdev.as_ptr(),
                     glue::EV_ABS,
-                    axis.to_raw() as _,
+                    code as _,
                     &info as *const _ as *const _,
                 )
             };

@@ -81,6 +81,7 @@ impl AbsAxis {
             glue::ABS_TILT_Y => Self::TiltY,
             glue::ABS_TOOL_WIDTH => Self::ToolWidth,
             glue::ABS_VOLUME => Self::Volume,
+            #[cfg(have_abs_profile)]
             glue::ABS_PROFILE => Self::Profile,
             glue::ABS_MISC => Self::Misc,
             glue::ABS_MT_SLOT => Self::MtSlot,
@@ -103,7 +104,7 @@ impl AbsAxis {
         Some(axis)
     }
 
-    pub(crate) fn to_raw(&self) -> u16 {
+    pub(crate) fn to_raw(&self) -> Option<u16> {
         let code = match self {
             Self::X => glue::ABS_X,
             Self::Y => glue::ABS_Y,
@@ -130,7 +131,10 @@ impl AbsAxis {
             Self::TiltY => glue::ABS_TILT_Y,
             Self::ToolWidth => glue::ABS_TOOL_WIDTH,
             Self::Volume => glue::ABS_VOLUME,
+            #[cfg(have_abs_profile)]
             Self::Profile => glue::ABS_PROFILE,
+            #[cfg(not(have_abs_profile))]
+            Self::Profile => return None,
             Self::Misc => glue::ABS_MISC,
             Self::MtSlot => glue::ABS_MT_SLOT,
             Self::MtTouchMajor => glue::ABS_MT_TOUCH_MAJOR,
@@ -148,7 +152,7 @@ impl AbsAxis {
             Self::MtToolY => glue::ABS_MT_TOOL_Y,
         };
 
-        code as _
+        Some(code as _)
     }
 }
 
