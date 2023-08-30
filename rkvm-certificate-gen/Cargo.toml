@@ -1,6 +1,6 @@
 [package]
 name = "rkvm-certificate-gen"
-version = "0.3.0"
+version = "0.4.1"
 authors = ["htrefil <8711792+htrefil@users.noreply.github.com>"]
 edition = "2021"
 
