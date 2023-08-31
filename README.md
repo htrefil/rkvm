@@ -87,5 +87,8 @@ Regardless, if you want a working and stable solution for crossplatform keyboard
 ## Contributions
 All contributions, that includes both PRs and issues, are very welcome.
 
+## Donations
+If you find rkvm useful, you can donate to the original author and maintainer using [Ko-fi](https://ko-fi.com/htrefil).
+
 ## License
 [MIT](LICENSE)
