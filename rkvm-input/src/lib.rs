@@ -7,6 +7,7 @@ pub mod rel;
 pub mod sync;
 pub mod writer;
 
+mod convert;
 mod evdev;
 mod glue;
 mod registry;

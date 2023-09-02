@@ -51,7 +51,6 @@ pub enum SwitchKey {
     BrightnessMax,
     BrightnessMin,
     BrightnessToggle,
-    BrightnessZero,
     BrightnessDown,
     BrightnessUp,
     BrlDot1,
@@ -107,7 +106,6 @@ pub enum SwitchKey {
     Delete,
     DeleteFile,
     Digits,
-    Direction,
     Directory,
     DisplayOff,
     DisplayToggle,
@@ -322,19 +320,33 @@ pub enum SwitchKey {
     Muhenkan,
     Mute,
     N,
+    #[serde(rename = "0")]
     N0,
+    #[serde(rename = "1")]
     N1,
+    #[serde(rename = "102nd")]
     N102nd,
+    #[serde(rename = "10-channels-down")]
     N10ChannelsDown,
+    #[serde(rename = "10-channels-up")]
     N10ChannelsUp,
+    #[serde(rename = "2")]
     N2,
+    #[serde(rename = "3")]
     N3,
+    #[serde(rename = "3d-mode")]
     N3dMode,
+    #[serde(rename = "4")]
     N4,
+    #[serde(rename = "5")]
     N5,
+    #[serde(rename = "6")]
     N6,
+    #[serde(rename = "7")]
     N7,
+    #[serde(rename = "8")]
     N8,
+    #[serde(rename = "9")]
     N9,
     New,
     News,
@@ -422,8 +434,6 @@ pub enum SwitchKey {
     Sat2,
     Save,
     Scale,
-    Screen,
-    Screenlock,
     Screensaver,
     ScrollDown,
     ScrollLock,
@@ -489,7 +499,6 @@ pub enum SwitchKey {
     VolumeUp,
     W,
     WakeUp,
-    Wimax,
     Wlan,
     WordProcessor,
     WpsButton,
@@ -502,7 +511,6 @@ pub enum SwitchKey {
     Yen,
     Z,
     ZenkakuHankaku,
-    Zoom,
     ZoomIn,
     ZoomOut,
     ZoomReset,
@@ -622,7 +630,6 @@ impl Into<Key> for SwitchKey {
     fn into(self) -> Key {
         match self {
             // Keys.
-            // Keys.
             Self::A => Key::Key(Keyboard::A),
             Self::Ab => Key::Key(Keyboard::Ab),
             Self::AddressBook => Key::Key(Keyboard::AddressBook),
@@ -656,7 +663,6 @@ impl Into<Key> for SwitchKey {
             Self::BrightnessMax => Key::Key(Keyboard::BrightnessMax),
             Self::BrightnessMin => Key::Key(Keyboard::BrightnessMin),
             Self::BrightnessToggle => Key::Key(Keyboard::BrightnessToggle),
-            Self::BrightnessZero => Key::Key(Keyboard::BrightnessZero),
             Self::BrightnessDown => Key::Key(Keyboard::BrightnessDown),
             Self::BrightnessUp => Key::Key(Keyboard::BrightnessUp),
             Self::BrlDot1 => Key::Key(Keyboard::BrlDot1),
@@ -712,7 +718,6 @@ impl Into<Key> for SwitchKey {
             Self::Delete => Key::Key(Keyboard::Delete),
             Self::DeleteFile => Key::Key(Keyboard::DeleteFile),
             Self::Digits => Key::Key(Keyboard::Digits),
-            Self::Direction => Key::Key(Keyboard::Direction),
             Self::Directory => Key::Key(Keyboard::Directory),
             Self::DisplayOff => Key::Key(Keyboard::DisplayOff),
             Self::DisplayToggle => Key::Key(Keyboard::DisplayToggle),
@@ -847,7 +852,7 @@ impl Into<Key> for SwitchKey {
             Self::Kp9 => Key::Key(Keyboard::Kp9),
             Self::KpAsterisk => Key::Key(Keyboard::KpAsterisk),
             Self::KpComma => Key::Key(Keyboard::KpComma),
-            Self::KpDott => Key::Key(Keyboard::KpDott),
+            Self::KpDott => Key::Key(Keyboard::KpDot),
             Self::KpEnter => Key::Key(Keyboard::KpEnter),
             Self::KpEqual => Key::Key(Keyboard::KpEqual),
             Self::KpJpComma => Key::Key(Keyboard::KpJpComma),
@@ -1027,8 +1032,6 @@ impl Into<Key> for SwitchKey {
             Self::Sat2 => Key::Key(Keyboard::Sat2),
             Self::Save => Key::Key(Keyboard::Save),
             Self::Scale => Key::Key(Keyboard::Scale),
-            Self::Screen => Key::Key(Keyboard::Screen),
-            Self::Screenlock => Key::Key(Keyboard::Screenlock),
             Self::Screensaver => Key::Key(Keyboard::Screensaver),
             Self::ScrollDown => Key::Key(Keyboard::ScrollDown),
             Self::ScrollLock => Key::Key(Keyboard::ScrollLock),
@@ -1094,7 +1097,6 @@ impl Into<Key> for SwitchKey {
             Self::VolumeUp => Key::Key(Keyboard::VolumeUp),
             Self::W => Key::Key(Keyboard::W),
             Self::WakeUp => Key::Key(Keyboard::WakeUp),
-            Self::Wimax => Key::Key(Keyboard::Wimax),
             Self::Wlan => Key::Key(Keyboard::Wlan),
             Self::WordProcessor => Key::Key(Keyboard::WordProcessor),
             Self::WpsButton => Key::Key(Keyboard::WpsButton),
@@ -1107,7 +1109,6 @@ impl Into<Key> for SwitchKey {
             Self::Yen => Key::Key(Keyboard::Yen),
             Self::Z => Key::Key(Keyboard::Z),
             Self::ZenkakuHankaku => Key::Key(Keyboard::ZenkakuHankaku),
-            Self::Zoom => Key::Key(Keyboard::Zoom),
             Self::ZoomIn => Key::Key(Keyboard::ZoomIn),
             Self::ZoomOut => Key::Key(Keyboard::ZoomOut),
             Self::ZoomReset => Key::Key(Keyboard::ZoomReset),

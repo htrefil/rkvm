@@ -3,6 +3,7 @@ mod caps;
 pub use caps::{AbsCaps, KeyCaps, RelCaps};
 
 use crate::abs::{AbsAxis, AbsEvent, ToolType};
+use crate::convert::Convert;
 use crate::evdev::Evdev;
 use crate::event::Event;
 use crate::glue;

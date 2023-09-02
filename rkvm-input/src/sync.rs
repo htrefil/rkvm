@@ -1,3 +1,4 @@
+use crate::convert::Convert;
 use crate::glue;
 
 use serde::{Deserialize, Serialize};
@@ -8,13 +9,25 @@ pub enum SyncEvent {
     Mt,
 }
 
-impl SyncEvent {
-    pub(crate) fn to_raw(&self) -> u16 {
-        let code = match self {
+impl Convert for SyncEvent {
+    type Raw = u16;
+
+    fn to_raw(&self) -> Option<Self::Raw> {
+        let raw = match self {
             Self::All => glue::SYN_REPORT,
             Self::Mt => glue::SYN_MT_REPORT,
         };
 
-        code as _
+        Some(raw as _)
+    }
+
+    fn from_raw(raw: Self::Raw) -> Option<Self> {
+        let event = match raw as _ {
+            glue::SYN_REPORT => SyncEvent::All,
+            glue::SYN_MT_REPORT => SyncEvent::Mt,
+            _ => return None,
+        };
+
+        Some(event)
     }
 }

@@ -1,3 +1,4 @@
+use crate::convert::Convert;
 use crate::glue;
 
 use serde::{Deserialize, Serialize};
@@ -24,8 +25,10 @@ pub enum RelAxis {
     HWheelHiRes,
 }
 
-impl RelAxis {
-    pub(crate) fn from_raw(code: u16) -> Option<Self> {
+impl Convert for RelAxis {
+    type Raw = u16;
+
+    fn from_raw(code: Self::Raw) -> Option<Self> {
         let axis = match code as _ {
             glue::REL_X => Self::X,
             glue::REL_Y => Self::Y,
@@ -45,7 +48,7 @@ impl RelAxis {
         Some(axis)
     }
 
-    pub(crate) fn to_raw(&self) -> u16 {
+    fn to_raw(&self) -> Option<Self::Raw> {
         let code = match self {
             Self::X => glue::REL_X,
             Self::Y => glue::REL_Y,
@@ -61,6 +64,6 @@ impl RelAxis {
             Self::HWheelHiRes => glue::REL_HWHEEL_HI_RES,
         };
 
-        code as _
+        Some(code as _)
     }
 }

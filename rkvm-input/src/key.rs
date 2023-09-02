@@ -4,6 +4,8 @@ mod keyboard;
 pub use button::Button;
 pub use keyboard::Keyboard;
 
+use crate::convert::Convert;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -18,8 +20,10 @@ pub enum Key {
     Button(Button),
 }
 
-impl Key {
-    pub(crate) fn from_raw(code: u16) -> Option<Self> {
+impl Convert for Key {
+    type Raw = u16;
+
+    fn from_raw(code: Self::Raw) -> Option<Self> {
         if let Some(key) = Keyboard::from_raw(code) {
             return Some(Self::Key(key));
         }
@@ -31,7 +35,7 @@ impl Key {
         None
     }
 
-    pub(crate) fn to_raw(&self) -> u16 {
+    fn to_raw(&self) -> Option<u16> {
         match self {
             Self::Key(key) => key.to_raw(),
             Self::Button(button) => button.to_raw(),

@@ -1,3 +1,4 @@
+use crate::convert::Convert;
 use crate::glue;
 
 use serde::{Deserialize, Serialize};
@@ -114,9 +115,11 @@ pub enum Button {
     TriggerHappy40,
 }
 
-impl Button {
-    pub(crate) fn to_raw(&self) -> u16 {
-        let code = match self {
+impl Convert for Button {
+    type Raw = u16;
+
+    fn to_raw(&self) -> Option<Self::Raw> {
+        let raw = match self {
             Self::B0 => glue::BTN_0,
             Self::B1 => glue::BTN_1,
             Self::B2 => glue::BTN_2,
@@ -227,11 +230,11 @@ impl Button {
             Self::TriggerHappy40 => glue::BTN_TRIGGER_HAPPY40,
         };
 
-        code as _
+        Some(raw as _)
     }
 
-    pub(crate) fn from_raw(code: u16) -> Option<Self> {
-        let button = match code as _ {
+    fn from_raw(raw: Self::Raw) -> Option<Self> {
+        let button = match raw as _ {
             glue::BTN_0 => Self::B0,
             glue::BTN_1 => Self::B1,
             glue::BTN_2 => Self::B2,

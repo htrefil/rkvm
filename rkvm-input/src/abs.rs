@@ -1,3 +1,4 @@
+use crate::convert::Convert;
 use crate::glue;
 
 use serde::{Deserialize, Serialize};
@@ -53,9 +54,11 @@ pub enum AbsAxis {
     MtToolY,
 }
 
-impl AbsAxis {
-    pub(crate) fn from_raw(code: u16) -> Option<Self> {
-        let axis = match code as _ {
+impl Convert for AbsAxis {
+    type Raw = u16;
+
+    fn from_raw(raw: Self::Raw) -> Option<Self> {
+        let axis = match raw as _ {
             glue::ABS_X => Self::X,
             glue::ABS_Y => Self::Y,
             glue::ABS_Z => Self::Z,
@@ -104,7 +107,7 @@ impl AbsAxis {
         Some(axis)
     }
 
-    pub(crate) fn to_raw(&self) -> Option<u16> {
+    fn to_raw(&self) -> Option<Self::Raw> {
         let code = match self {
             Self::X => glue::ABS_X,
             Self::Y => glue::ABS_Y,
@@ -174,9 +177,11 @@ pub enum ToolType {
     Dial,
 }
 
-impl ToolType {
-    pub(crate) fn from_raw(value: i32) -> Option<Self> {
-        let value = match value as _ {
+impl Convert for ToolType {
+    type Raw = i32;
+
+    fn from_raw(raw: Self::Raw) -> Option<Self> {
+        let r#type = match raw as _ {
             glue::MT_TOOL_FINGER => Self::Finger,
             glue::MT_TOOL_PEN => Self::Pen,
             glue::MT_TOOL_PALM => Self::Palm,
@@ -184,10 +189,10 @@ impl ToolType {
             _ => return None,
         };
 
-        Some(value)
+        Some(r#type)
     }
 
-    pub(crate) fn to_raw(&self) -> i32 {
+    fn to_raw(&self) -> Option<Self::Raw> {
         let value = match self {
             Self::Finger => glue::MT_TOOL_FINGER,
             Self::Pen => glue::MT_TOOL_PEN,
@@ -195,6 +200,6 @@ impl ToolType {
             Self::Dial => glue::MT_TOOL_DIAL,
         };
 
-        value as _
+        Some(value as _)
     }
 }
