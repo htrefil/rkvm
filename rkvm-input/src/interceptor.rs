@@ -3,8 +3,9 @@ mod caps;
 pub use caps::{AbsCaps, KeyCaps, RelCaps};
 
 use crate::abs::{AbsAxis, AbsEvent, ToolType};
+use crate::evdev::Evdev;
 use crate::event::Event;
-use crate::glue::{self, libevdev};
+use crate::glue;
 use crate::key::{Key, KeyEvent};
 use crate::registry::{Entry, Handle, Registry};
 use crate::rel::{RelAxis, RelEvent};
@@ -13,21 +14,14 @@ use crate::writer::Writer;
 
 use std::collections::VecDeque;
 use std::ffi::CStr;
-use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
-use std::os::fd::AsRawFd;
 use std::os::unix::fs::MetadataExt;
-use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
-use std::ptr::NonNull;
 use thiserror::Error;
-use tokio::io::unix::AsyncFd;
-use tokio::task;
 
 pub struct Interceptor {
-    file: AsyncFd<File>,
-    evdev: NonNull<libevdev>,
+    evdev: Evdev,
     writer: Writer,
     // The state of `read` is stored here to make it cancel safe.
     events: VecDeque<Event>,
@@ -142,8 +136,10 @@ impl Interceptor {
     }
 
     async fn read_raw(&mut self) -> Result<(u16, u16, i32), Error> {
+        let file = self.evdev.file().unwrap();
+
         loop {
-            let result = self.file.readable().await?.try_io(|_| {
+            let result = file.readable().await?.try_io(|_| {
                 let mut event = MaybeUninit::uninit();
                 let ret = unsafe {
                     glue::libevdev_next_event(
@@ -179,22 +175,9 @@ impl Interceptor {
     }
 
     pub(crate) async fn open(path: &Path, registry: &Registry) -> Result<Self, OpenError> {
-        let path = path.to_owned();
-        let registry = registry.clone();
+        let evdev = Evdev::open(path).await?;
+        let metadata = evdev.file().unwrap().get_ref().metadata()?;
 
-        task::spawn_blocking(move || Self::open_sync(&path, &registry))
-            .await
-            .map_err(|err| OpenError::Io(err.into()))?
-    }
-
-    fn open_sync(path: &Path, registry: &Registry) -> Result<Self, OpenError> {
-        let file = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NONBLOCK)
-            .open(path)
-            .and_then(AsyncFd::new)?;
-
-        let metadata = file.get_ref().metadata()?;
         let reader_handle = registry
             .register(Entry {
                 device: metadata.dev(),
@@ -202,26 +185,12 @@ impl Interceptor {
             })
             .ok_or(OpenError::NotAppliable)?;
 
-        let mut evdev = MaybeUninit::uninit();
-
-        let ret = unsafe { glue::libevdev_new_from_fd(file.as_raw_fd(), evdev.as_mut_ptr()) };
-        if ret < 0 {
-            return Err(Error::from_raw_os_error(-ret).into());
-        }
-
-        let evdev = unsafe { evdev.assume_init() };
-        let evdev = NonNull::new(evdev).unwrap();
-
         // "Upon binding to a device or resuming from suspend, a driver must report
         // the current switch state. This ensures that the device, kernel, and userspace
         // state is in sync."
         // We have no way of knowing that.
         let sw = unsafe { glue::libevdev_has_event_type(evdev.as_ptr(), glue::EV_SW) };
         if sw == 1 {
-            unsafe {
-                glue::libevdev_free(evdev.as_ptr());
-            }
-
             return Err(OpenError::NotAppliable);
         }
 
@@ -250,10 +219,6 @@ impl Interceptor {
                     unsafe { glue::libevdev_disable_event_code(evdev.as_ptr(), glue::EV_ABS, i) };
 
                 if ret < 0 {
-                    unsafe {
-                        glue::libevdev_free(evdev.as_ptr());
-                    }
-
                     return Err(Error::from_raw_os_error(-ret).into());
                 }
             }
@@ -267,41 +232,17 @@ impl Interceptor {
             unsafe { glue::libevdev_grab(evdev.as_ptr(), glue::libevdev_grab_mode_LIBEVDEV_GRAB) };
 
         if ret < 0 {
-            unsafe {
-                glue::libevdev_free(evdev.as_ptr());
-            }
-
             return Err(Error::from_raw_os_error(-ret).into());
         }
 
-        let writer = unsafe { Writer::from_evdev(evdev.as_ptr()) };
-        let writer = match writer {
-            Ok(writer) => writer,
-            Err(err) => {
-                unsafe {
-                    glue::libevdev_free(evdev.as_ptr());
-                }
+        let writer = Writer::from_evdev(&evdev).await?;
+        let entry = writer.entry()?;
 
-                return Err(err.into());
-            }
-        };
-
-        // TODO: This is ugly. Need to refactor the evdev wrappers.
-        let entry = match writer.entry() {
-            Ok(entry) => entry,
-            Err(err) => {
-                unsafe {
-                    glue::libevdev_free(evdev.as_ptr());
-                }
-
-                return Err(err.into());
-            }
-        };
-
-        let writer_handle = registry.register(entry).unwrap();
+        let writer_handle = registry
+            .register(entry)
+            .ok_or_else(|| Error::new(ErrorKind::Other, "Writer already registered"))?;
 
         Ok(Self {
-            file,
             evdev,
             writer,
             events: VecDeque::new(),
@@ -311,14 +252,6 @@ impl Interceptor {
             _reader_handle: reader_handle,
             _writer_handle: writer_handle,
         })
-    }
-}
-
-impl Drop for Interceptor {
-    fn drop(&mut self) {
-        unsafe {
-            glue::libevdev_free(self.evdev.as_ptr());
-        }
     }
 }
 

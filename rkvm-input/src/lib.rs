@@ -7,5 +7,7 @@ pub mod rel;
 pub mod sync;
 pub mod writer;
 
+mod evdev;
 mod glue;
 mod registry;
+mod uinput;

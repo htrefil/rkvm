@@ -1,27 +1,21 @@
 use crate::abs::{AbsAxis, AbsEvent, AbsInfo};
+use crate::evdev::Evdev;
 use crate::event::Event;
-use crate::glue::{self, input_absinfo, libevdev, libevdev_uinput};
+use crate::glue::{self, input_absinfo};
 use crate::key::{Key, KeyEvent};
 use crate::registry::Entry;
 use crate::rel::{RelAxis, RelEvent};
+use crate::uinput::Uinput;
 
 use std::ffi::{CStr, OsStr};
-use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind};
-use std::mem::MaybeUninit;
-use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
-use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
-use std::ptr::NonNull;
 use std::{fs, ptr};
-use tokio::io::unix::AsyncFd;
-use tokio::task;
 
 pub struct Writer {
-    file: AsyncFd<File>,
-    uinput: NonNull<libevdev_uinput>,
+    uinput: Uinput,
 }
 
 impl Writer {
@@ -69,28 +63,10 @@ impl Writer {
         })
     }
 
-    pub(crate) unsafe fn from_evdev(evdev: *const libevdev) -> Result<Self, Error> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .custom_flags(libc::O_NONBLOCK)
-            .open("/dev/uinput")
-            .and_then(AsyncFd::new)?;
-
-        let mut uinput = MaybeUninit::uninit();
-
-        let ret = unsafe {
-            glue::libevdev_uinput_create_from_device(evdev, file.as_raw_fd(), uinput.as_mut_ptr())
-        };
-
-        if ret < 0 {
-            return Err(Error::from_raw_os_error(-ret));
-        }
-
-        let uinput = unsafe { uinput.assume_init() };
-        let uinput = NonNull::new(uinput).unwrap();
-
-        Ok(Self { file, uinput })
+    pub(crate) async fn from_evdev(evdev: &Evdev) -> Result<Self, Error> {
+        Ok(Self {
+            uinput: Uinput::from_evdev(evdev).await?,
+        })
     }
 
     pub(crate) async fn write_raw(
@@ -100,7 +76,7 @@ impl Writer {
         value: i32,
     ) -> Result<(), Error> {
         loop {
-            let result = self.file.writable().await?.try_io(|_| {
+            let result = self.uinput.file().writable().await?.try_io(|_| {
                 let ret = unsafe {
                     glue::libevdev_uinput_write_event(
                         self.uinput.as_ptr(),
@@ -125,25 +101,13 @@ impl Writer {
     }
 }
 
-impl Drop for Writer {
-    fn drop(&mut self) {
-        unsafe {
-            glue::libevdev_uinput_destroy(self.uinput.as_ptr());
-        }
-    }
-}
-
-unsafe impl Send for Writer {}
-
 pub struct WriterBuilder {
-    evdev: NonNull<libevdev>,
+    evdev: Evdev,
 }
 
 impl WriterBuilder {
     pub fn new() -> Result<Self, Error> {
-        let evdev = unsafe { glue::libevdev_new() };
-        let evdev = NonNull::new(evdev)
-            .ok_or_else(|| Error::new(ErrorKind::Other, "Failed to create device"))?;
+        let evdev = Evdev::new()?;
 
         unsafe {
             glue::libevdev_set_id_bustype(evdev.as_ptr(), glue::BUS_VIRTUAL as _);
@@ -269,16 +233,6 @@ impl WriterBuilder {
     }
 
     pub async fn build(self) -> Result<Writer, Error> {
-        task::spawn_blocking(move || unsafe { Writer::from_evdev(self.evdev.as_ref()) }).await?
-    }
-}
-
-unsafe impl Send for WriterBuilder {}
-
-impl Drop for WriterBuilder {
-    fn drop(&mut self) {
-        unsafe {
-            glue::libevdev_free(self.evdev.as_ptr());
-        }
+        Writer::from_evdev(&self.evdev).await
     }
 }
