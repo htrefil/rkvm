@@ -15,9 +15,9 @@ use crate::writer::Writer;
 
 use std::collections::VecDeque;
 use std::ffi::CStr;
+use std::fs;
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use thiserror::Error;
 
@@ -34,9 +34,10 @@ pub struct Interceptor {
 }
 
 impl Interceptor {
+    #[tracing::instrument(fields(path = ?self.writer.path()), skip(self))]
     pub async fn read(&mut self) -> Result<Event, Error> {
         if let Some((r#type, code, value)) = self.writing {
-            log::trace!("Resuming interrupted write");
+            tracing::trace!("Resuming interrupted write");
 
             self.writer.write_raw(r#type, code, value).await?;
             self.writing = None;
@@ -72,7 +73,7 @@ impl Interceptor {
                         Some(Event::Sync(SyncEvent::All))
                     }
                     glue::SYN_DROPPED => {
-                        log::warn!(
+                        tracing::warn!(
                             "Dropped {} event{}",
                             self.events.len(),
                             if self.events.len() == 1 { "" } else { "s" }
@@ -175,15 +176,13 @@ impl Interceptor {
         }
     }
 
+    #[tracing::instrument(skip(registry))]
     pub(crate) async fn open(path: &Path, registry: &Registry) -> Result<Self, OpenError> {
         let evdev = Evdev::open(path).await?;
         let metadata = evdev.file().unwrap().get_ref().metadata()?;
 
         let reader_handle = registry
-            .register(Entry {
-                device: metadata.dev(),
-                inode: metadata.ino(),
-            })
+            .register(Entry::from_metadata(&metadata))
             .ok_or(OpenError::NotAppliable)?;
 
         // "Upon binding to a device or resuming from suspend, a driver must report
@@ -209,7 +208,7 @@ impl Interceptor {
             let max = abs_info.maximum;
 
             if (min != 0 || max != 0) && max < min {
-                log::warn!(
+                tracing::warn!(
                     "Detected nonsense min ({}) and max ({}) values for absolute axis {}, disabling it",
                     min,
                     max,
@@ -237,10 +236,13 @@ impl Interceptor {
         }
 
         let writer = Writer::from_evdev(&evdev).await?;
-        let entry = writer.entry()?;
+        let path = writer
+            .path()
+            .ok_or_else(|| Error::new(ErrorKind::Other, "No syspath for writer"))?;
 
+        let metadata = fs::metadata(path)?;
         let writer_handle = registry
-            .register(entry)
+            .register(Entry::from_metadata(&metadata))
             .ok_or_else(|| Error::new(ErrorKind::Other, "Writer already registered"))?;
 
         Ok(Self {

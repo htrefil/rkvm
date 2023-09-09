@@ -13,12 +13,13 @@ rkvm-input = { path = "../rkvm-input" }
 rkvm-net = { path = "../rkvm-net" }
 serde = { version = "1.0.117", features = ["derive"] }
 toml = "0.5.7"
-log = "0.4.11"
 env_logger = "0.8.1"
 clap = { version = "4.2.2", features = ["derive"] }
 thiserror = "1.0.40"
 tokio-rustls = "0.24.0"
 rustls-pemfile = "1.0.2"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 
 [package.metadata.rpm]
 package = "rkvm-client"

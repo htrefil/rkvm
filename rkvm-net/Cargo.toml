@@ -16,5 +16,5 @@ thiserror = "1.0.40"
 hmac = "0.12.1"
 sha2 = "0.10.6"
 rand = "0.8.5"
-log = "0.4.11"
 socket2 = { version = "0.5.3", features = ["all"] }
+tracing = "0.1.37"

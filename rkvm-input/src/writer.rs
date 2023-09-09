@@ -4,16 +4,14 @@ use crate::evdev::Evdev;
 use crate::event::Event;
 use crate::glue::{self, input_absinfo};
 use crate::key::{Key, KeyEvent};
-use crate::registry::Entry;
 use crate::rel::{RelAxis, RelEvent};
 use crate::uinput::Uinput;
 
 use std::ffi::{CStr, OsStr};
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
-use std::{fs, ptr};
+use std::ptr;
 
 pub struct Writer {
     uinput: Uinput,
@@ -46,22 +44,17 @@ impl Writer {
         Ok(())
     }
 
-    pub(crate) fn entry(&self) -> Result<Entry, Error> {
+    pub fn path(&self) -> Option<&Path> {
         let path = unsafe { glue::libevdev_uinput_get_devnode(self.uinput.as_ptr()) };
         if path.is_null() {
-            return Err(Error::new(ErrorKind::Other, "No syspath for device"));
+            return None;
         }
 
         let path = unsafe { CStr::from_ptr(path) };
         let path = OsStr::from_bytes(path.to_bytes());
         let path = Path::new(path);
 
-        let metadata = fs::metadata(path)?;
-
-        Ok(Entry {
-            device: metadata.dev(),
-            inode: metadata.ino(),
-        })
+        Some(path)
     }
 
     pub(crate) async fn from_evdev(evdev: &Evdev) -> Result<Self, Error> {

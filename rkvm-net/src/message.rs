@@ -23,7 +23,7 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
             .deserialize(&data)
             .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
 
-        log::trace!("Read {} bytes", 2 + length);
+        tracing::trace!("Read {} bytes", 2 + length);
 
         Ok(data)
     }
@@ -41,7 +41,7 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
         stream.write_u16(length).await?;
         stream.write_all(&data).await?;
 
-        log::trace!("Wrote {} bytes", 2 + data.len());
+        tracing::trace!("Wrote {} bytes", 2 + data.len());
 
         Ok(())
     }

@@ -4,12 +4,15 @@ mod tls;
 
 use clap::Parser;
 use config::Config;
-use log::LevelFilter;
 use std::future;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 use tokio::{fs, signal, time};
+use tracing::subscriber;
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
+use tracing_subscriber::fmt;
+use tracing_subscriber::prelude::*;
 
 #[derive(Parser)]
 #[structopt(name = "rkvm-server", about = "The rkvm server application")]
@@ -22,17 +25,21 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    env_logger::builder()
-        .format_timestamp(None)
-        .filter(None, LevelFilter::Info)
-        .parse_default_env()
-        .init();
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env_lossy();
+
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer().without_time());
+
+    subscriber::set_global_default(registry).unwrap();
 
     let args = Args::parse();
     let config = match fs::read_to_string(&args.config_path).await {
         Ok(config) => config,
         Err(err) => {
-            log::error!("Error reading config: {}", err);
+            tracing::error!("Error reading config: {}", err);
             return ExitCode::FAILURE;
         }
     };
@@ -40,7 +47,7 @@ async fn main() -> ExitCode {
     let config = match toml::from_str::<Config>(&config) {
         Ok(config) => config,
         Err(err) => {
-            log::error!("Error parsing config: {}", err);
+            tracing::error!("Error parsing config: {}", err);
             return ExitCode::FAILURE;
         }
     };
@@ -48,7 +55,7 @@ async fn main() -> ExitCode {
     let acceptor = match tls::configure(&config.certificate, &config.key).await {
         Ok(acceptor) => acceptor,
         Err(err) => {
-            log::error!("Error configuring TLS: {}", err);
+            tracing::error!("Error configuring TLS: {}", err);
             return ExitCode::FAILURE;
         }
     };
@@ -65,21 +72,21 @@ async fn main() -> ExitCode {
     tokio::select! {
         result = server::run(config.listen, acceptor, &config.password, &switch_keys) => {
             if let Err(err) = result {
-                log::error!("Error: {}", err);
+                tracing::error!("Error: {}", err);
                 return ExitCode::FAILURE;
             }
         }
         // This is needed to properly clean libevdev stuff up.
         result = signal::ctrl_c() => {
             if let Err(err) = result {
-                log::error!("Error setting up signal handler: {}", err);
+                tracing::error!("Error setting up signal handler: {}", err);
                 return ExitCode::FAILURE;
             }
 
-            log::info!("Exiting on signal");
+            tracing::info!("Exiting on signal");
         }
         _ = shutdown => {
-            log::info!("Shutting down as requested");
+            tracing::info!("Shutting down as requested");
         }
     }
 

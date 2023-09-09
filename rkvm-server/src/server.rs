@@ -21,6 +21,7 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time;
 use tokio_rustls::TlsAcceptor;
+use tracing::Instrument;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -39,7 +40,7 @@ pub async fn run(
     switch_keys: &HashSet<Key>,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
-    log::info!("Listening on {}", listen);
+    tracing::info!("Listening on {}", listen);
 
     let mut monitor = Monitor::new();
     let mut devices = Slab::<Device>::new();
@@ -83,14 +84,18 @@ pub async fn run(
                 let (sender, receiver) = mpsc::channel(1);
                 clients.insert(sender);
 
-                tokio::spawn(async move {
-                    log::info!("{}: Connected", addr);
+                let span = tracing::info_span!("connection", addr = %addr);
+                tokio::spawn(
+                    async move {
+                        tracing::info!("Connected");
 
-                    match client(init_updates, receiver, stream, addr, acceptor, &password).await {
-                        Ok(()) => log::info!("{}: Disconnected", addr),
-                        Err(err) => log::error!("{}: Disconnected: {}", addr, err),
+                        match client(init_updates, receiver, stream, acceptor, &password).await {
+                            Ok(()) => tracing::info!("Disconnected"),
+                            Err(err) => tracing::error!("Disconnected: {}", err),
+                        }
                     }
-                });
+                    .instrument(span),
+                );
             }
             result = monitor.read() => {
                 let mut interceptor = result.map_err(Error::Input)?;
@@ -154,7 +159,7 @@ pub async fn run(
                                     }
                                 }
 
-                                log::trace!("Wrote an event to device {}", id);
+                                tracing::trace!("Wrote an event to device {}", id);
                             }
                         }
                     }
@@ -162,7 +167,7 @@ pub async fn run(
 
                 let device = &devices[id];
 
-                log::info!(
+                tracing::info!(
                     "Registered new device {} (name {:?}, vendor {}, product {}, version {})",
                     id,
                     device.name,
@@ -202,7 +207,7 @@ pub async fn run(
                             previous = idx;
                             changed = true;
 
-                            log::debug!("Switched to client {}", current);
+                            tracing::debug!("Switched to client {}", current);
                         } else if changed {
                             idx = previous;
 
@@ -248,7 +253,7 @@ pub async fn run(
                     }
                     devices.remove(id);
 
-                    log::info!("Destroyed device {}", id);
+                    tracing::info!("Destroyed device {}", id);
                 }
                 Err(err) => return Err(Error::Input(err)),
             }
@@ -283,7 +288,6 @@ async fn client(
     mut init_updates: VecDeque<Update>,
     mut receiver: Receiver<Update>,
     stream: TcpStream,
-    addr: SocketAddr,
     acceptor: TlsAcceptor,
     password: &str,
 ) -> Result<(), ClientError> {
@@ -291,7 +295,7 @@ async fn client(
         socket::configure(&stream)?;
 
         let stream = acceptor.accept(stream).await?;
-        log::info!("{}: TLS connected", addr);
+        tracing::info!("TLS connected");
 
         let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
@@ -324,7 +328,7 @@ async fn client(
             return Err(ClientError::Auth);
         }
 
-        log::info!("{}: Authenticated successfully", addr);
+        tracing::info!("Authenticated successfully");
 
         Ok(stream)
     };
@@ -366,9 +370,8 @@ async fn client(
             .await
             .map_err(|_| io::Error::new(ErrorKind::TimedOut, "Update writing took too long"))??;
 
-        log::trace!(
-            "{}: Wrote {} update{}",
-            addr,
+        tracing::trace!(
+            "Wrote {} update{}",
             count,
             if count == 1 { "" } else { "s" }
         );

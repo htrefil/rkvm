@@ -42,14 +42,14 @@ pub async fn run(
 
     socket::configure(&stream).map_err(Error::Network)?;
 
-    log::info!("Connected to server");
+    tracing::info!("Connected to server");
 
     let stream = connector
         .connect(hostname.clone(), stream)
         .await
         .map_err(Error::Network)?;
 
-    log::info!("TLS connected");
+    tracing::info!("TLS connected");
 
     let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
@@ -80,7 +80,7 @@ pub async fn run(
         AuthStatus::Failed => return Err(Error::Auth),
     }
 
-    log::info!("Authenticated successfully");
+    tracing::info!("Authenticated successfully");
 
     let mut writers = HashMap::new();
 
@@ -121,7 +121,7 @@ pub async fn run(
 
                 entry.or_insert(writer);
 
-                log::info!(
+                tracing::info!(
                     "Created new device {} (name {:?}, vendor {}, product {}, version {})",
                     id,
                     name,
@@ -138,7 +138,7 @@ pub async fn run(
                     )));
                 }
 
-                log::info!("Destroyed device {}", id);
+                tracing::info!("Destroyed device {}", id);
             }
             Update::Event { id, event } => {
                 let writer = writers.get_mut(&id).ok_or_else(|| {
@@ -150,7 +150,7 @@ pub async fn run(
 
                 writer.write(&event).await.map_err(Error::Input)?;
 
-                log::trace!("Wrote an event to device {}", id);
+                tracing::trace!("Wrote an event to device {}", id);
             }
         }
     }
