@@ -1,6 +1,6 @@
 [Unit]
 Description=rkvm server
-After=network-online.target
+After=network.target
 
 [Service]
 ExecStart=/usr/bin/rkvm-server /etc/rkvm/server.toml

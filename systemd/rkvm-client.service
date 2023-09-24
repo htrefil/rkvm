@@ -1,8 +1,9 @@
 [Unit]
 Description=rkvm client
+Wants=network-online.target
 After=network-online.target
 # This prevents systemd from giving up trying to restart the service.
-StartLimitBurst=0
+StartLimitIntervalSec=0
 
 [Service]
 ExecStart=/usr/bin/rkvm-client /etc/rkvm/client.toml
