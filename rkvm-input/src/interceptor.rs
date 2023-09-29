@@ -232,7 +232,15 @@ impl Interceptor {
             unsafe { glue::libevdev_grab(evdev.as_ptr(), glue::libevdev_grab_mode_LIBEVDEV_GRAB) };
 
         if ret < 0 {
-            return Err(Error::from_raw_os_error(-ret).into());
+            // We do not use ErrorKind::ResourceBusy because it is a nightly-only API.
+            let err = if ret == -libc::EBUSY {
+                tracing::info!("Ignored {:?} because it is busy and can not be grabbed", path);
+                OpenError::NotAppliable
+            } else {
+                Error::from_raw_os_error(-ret).into()
+            };
+
+            return Err(err);
         }
 
         let writer = Writer::from_evdev(&evdev).await?;
