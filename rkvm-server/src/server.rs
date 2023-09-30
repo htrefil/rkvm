@@ -7,7 +7,7 @@ use rkvm_input::sync::SyncEvent;
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
-use rkvm_net::{socket, Update};
+use rkvm_net::Update;
 use slab::Slab;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
@@ -292,8 +292,6 @@ async fn client(
     password: &str,
 ) -> Result<(), ClientError> {
     let negotiate = async {
-        socket::configure(&stream)?;
-
         let stream = acceptor.accept(stream).await?;
         tracing::info!("TLS connected");
 

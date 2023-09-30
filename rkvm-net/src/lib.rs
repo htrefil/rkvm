@@ -1,6 +1,5 @@
 pub mod auth;
 pub mod message;
-pub mod socket;
 pub mod version;
 
 use rkvm_input::abs::{AbsAxis, AbsInfo};

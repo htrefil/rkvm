@@ -2,7 +2,7 @@ use rkvm_input::writer::Writer;
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
-use rkvm_net::{socket, Update};
+use rkvm_net::Update;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::io;
@@ -39,8 +39,6 @@ pub async fn run(
             .map_err(Error::Network)?,
         _ => unimplemented!("Unhandled rustls ServerName variant: {:?}", hostname),
     };
-
-    socket::configure(&stream).map_err(Error::Network)?;
 
     tracing::info!("Connected to server");
 
