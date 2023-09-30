@@ -51,6 +51,7 @@ fn main() -> ExitCode {
         &args.key,
         &args.dns_names,
         &args.ip_addresses,
+        args.days,
     );
 
     match result {
@@ -77,6 +78,7 @@ fn run(
     key: &Path,
     dns_names: &[String],
     ip_addresses: &[IpAddr],
+    days: u32,
 ) -> Result<(), Error> {
     let mut config = "[req]
 prompt = no
@@ -118,7 +120,7 @@ subjectAltName = @alt_names
         .arg("-config")
         .arg(file.path())
         .arg("-days")
-        .arg("3650")
+        .arg(days.to_string())
         .status()?;
 
     if !status.success() {
