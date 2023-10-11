@@ -44,7 +44,7 @@ pub async fn run(
 
     let mut monitor = Monitor::new();
     let mut devices = Slab::<Device>::new();
-    let mut clients = Slab::new();
+    let mut clients = Slab::<(Sender<_>, SocketAddr)>::new();
     let mut current = 0;
     let mut previous = 0;
     let mut changed = false;
@@ -62,7 +62,7 @@ pub async fn run(
                 let password = password.to_owned();
 
                 // Remove dead clients.
-                clients.retain(|_, client: &mut Sender<_>| !client.is_closed());
+                clients.retain(|_, (client, _)| !client.is_closed());
                 if !clients.contains(current) {
                     current = 0;
                 }
@@ -82,7 +82,7 @@ pub async fn run(
                     .collect();
 
                 let (sender, receiver) = mpsc::channel(1);
-                clients.insert(sender);
+                clients.insert((sender, addr));
 
                 let span = tracing::info_span!("connection", addr = %addr);
                 tokio::spawn(
@@ -109,7 +109,7 @@ pub async fn run(
                 let abs = interceptor.abs().collect::<HashMap<_,_>>();
                 let keys = interceptor.key().collect::<HashSet<_>>();
 
-                for (_, sender) in &clients {
+                for (_, (sender, _)) in &clients {
                     let update = Update::CreateDevice {
                         id,
                         name: name.clone(),
@@ -207,7 +207,11 @@ pub async fn run(
                             previous = idx;
                             changed = true;
 
-                            tracing::debug!("Switched to client {}", current);
+                            if current != 0 {
+                                tracing::info!(idx = %current, addr = %clients[current - 1].1, "Switched client");
+                            } else {
+                                tracing::info!(idx = %current, "Switched client");
+                            }
                         } else if changed {
                             idx = previous;
 
@@ -238,7 +242,7 @@ pub async fn run(
                     }
 
                     for event in events {
-                        if clients[idx - 1].send(Update::Event { id, event }).await.is_err() {
+                        if clients[idx - 1].0.send(Update::Event { id, event }).await.is_err() {
                             clients.remove(idx - 1);
 
                             if current == idx {
@@ -248,7 +252,7 @@ pub async fn run(
                     }
                 }
                 Err(err) if err.kind() == ErrorKind::BrokenPipe => {
-                    for (_, sender) in &clients {
+                    for (_, (sender, _)) in &clients {
                         let _ = sender.send(Update::DestroyDevice { id }).await;
                     }
                     devices.remove(id);
