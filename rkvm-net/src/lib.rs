@@ -9,6 +9,21 @@ use rkvm_input::rel::RelAxis;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
+use std::future::Future;
+use std::io::{Error, ErrorKind};
+use std::time::Duration;
+use tokio::time;
+
+pub const PING_INTERVAL: Duration = Duration::from_secs(1);
+
+// Message read timeout (does not apply to updates, only auth negotiation and replies).
+pub const READ_TIMEOUT: Duration = Duration::from_millis(500);
+
+// Message write timeout (applies to all messages).
+pub const WRITE_TIMEOUT: Duration = Duration::from_millis(500);
+
+// TLS negotiation timeout.
+pub const TLS_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum Update {
@@ -29,4 +44,31 @@ pub enum Update {
         id: usize,
         event: Event,
     },
+    Ping,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Pong;
+
+pub async fn timeout<T: Future<Output = Result<U, Error>>, U>(
+    duration: Duration,
+    future: T,
+) -> Result<U, Error> {
+    time::timeout(duration, future)
+        .await
+        .map_err(|err| Error::new(ErrorKind::TimedOut, err))?
+}
+
+#[cfg(test)]
+mod test {
+    use super::message::Message;
+    use super::*;
+
+    #[tokio::test]
+    async fn pong_is_not_empty() {
+        let mut data = Vec::new();
+        Pong.encode(&mut data).await.unwrap();
+
+        assert!(!data.is_empty());
+    }
 }

@@ -7,13 +7,13 @@ use rkvm_input::sync::SyncEvent;
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
-use rkvm_net::Update;
+use rkvm_net::{Pong, Update};
 use slab::Slab;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
 use std::io::{self, ErrorKind};
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::Instant;
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufStream};
 use tokio::net::{TcpListener, TcpStream};
@@ -291,88 +291,104 @@ async fn client(
     acceptor: TlsAcceptor,
     password: &str,
 ) -> Result<(), ClientError> {
-    let negotiate = async {
-        let stream = acceptor.accept(stream).await?;
-        tracing::info!("TLS connected");
+    let stream = rkvm_net::timeout(rkvm_net::TLS_TIMEOUT, acceptor.accept(stream)).await?;
+    tracing::info!("TLS connected");
 
-        let mut stream = BufStream::with_capacity(1024, 1024, stream);
+    let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
+    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
         Version::CURRENT.encode(&mut stream).await?;
         stream.flush().await?;
 
-        let version = Version::decode(&mut stream).await?;
-        if version != Version::CURRENT {
-            return Err(ClientError::Version {
-                server: Version::CURRENT,
-                client: version,
-            });
-        }
+        Ok(())
+    })
+    .await?;
 
-        let challenge = AuthChallenge::generate().await?;
+    let version = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Version::decode(&mut stream)).await?;
+    if version != Version::CURRENT {
+        return Err(ClientError::Version {
+            server: Version::CURRENT,
+            client: version,
+        });
+    }
 
+    let challenge = AuthChallenge::generate().await?;
+
+    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
         challenge.encode(&mut stream).await?;
         stream.flush().await?;
 
-        let response = AuthResponse::decode(&mut stream).await?;
-        let status = match response.verify(&challenge, password) {
-            true => AuthStatus::Passed,
-            false => AuthStatus::Failed,
-        };
+        Ok(())
+    })
+    .await?;
 
+    let response =
+        rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthResponse::decode(&mut stream)).await?;
+    let status = match response.verify(&challenge, password) {
+        true => AuthStatus::Passed,
+        false => AuthStatus::Failed,
+    };
+
+    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
         status.encode(&mut stream).await?;
         stream.flush().await?;
 
-        if status == AuthStatus::Failed {
-            return Err(ClientError::Auth);
-        }
+        Ok(())
+    })
+    .await?;
 
-        tracing::info!("Authenticated successfully");
+    if status == AuthStatus::Failed {
+        return Err(ClientError::Auth);
+    }
 
-        Ok(stream)
-    };
+    tracing::info!("Authenticated successfully");
 
-    let mut stream = time::timeout(Duration::from_secs(1), negotiate)
-        .await
-        .map_err(|_| io::Error::new(ErrorKind::TimedOut, "Negotiation took too long"))??;
+    let mut interval = time::interval(rkvm_net::PING_INTERVAL);
 
     loop {
         let recv = async {
             match init_updates.pop_front() {
-                Some(update) => Some((update, false)),
-                None => receiver.recv().await.map(|update| (update, true)),
+                Some(update) => Some(update),
+                None => receiver.recv().await,
             }
         };
 
-        let (update, more) = match recv.await {
-            Some(um) => um,
+        let update = tokio::select! {
+            // Make sure pings have priority.
+            // The client could time out otherwise.
+            biased;
+
+            _ = interval.tick() => Some(Update::Ping),
+            recv = recv => recv,
+        };
+
+        let update = match update {
+            Some(update) => update,
             None => break,
         };
 
-        let mut count = 1;
-
-        let write = async {
+        let start = Instant::now();
+        rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
             update.encode(&mut stream).await?;
+            stream.flush().await?;
 
-            // Coalesce multiple consecutive updates into one chunk.
-            if more {
-                while let Ok(update) = receiver.try_recv() {
-                    update.encode(&mut stream).await?;
-                    count += 1;
-                }
-            }
+            Ok(())
+        })
+        .await?;
+        let duration = start.elapsed();
 
-            stream.flush().await
-        };
+        if let Update::Ping = update {
+            // Keeping these as debug because it's not as frequent as other updates.
+            tracing::debug!(duration = ?duration, "Sent ping");
 
-        time::timeout(Duration::from_millis(500), write)
-            .await
-            .map_err(|_| io::Error::new(ErrorKind::TimedOut, "Update writing took too long"))??;
+            let start = Instant::now();
+            rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Pong::decode(&mut stream)).await?;
+            let duration = start.elapsed();
 
-        tracing::trace!(
-            "Wrote {} update{}",
-            count,
-            if count == 1 { "" } else { "s" }
-        );
+            tracing::debug!(duration = ?duration, "Received pong");
+        }
+
+        tracing::trace!("Wrote an update");
     }
 
     Ok(())
