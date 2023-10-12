@@ -150,12 +150,12 @@ pub async fn run(
                 entry.or_insert(writer);
 
                 tracing::info!(
-                    "Created new device {} (name {:?}, vendor {}, product {}, version {})",
-                    id,
-                    name,
-                    vendor,
-                    product,
-                    version
+                    id = %id,
+                    name = ?name,
+                    vendor = %vendor,
+                    product = %product,
+                    version = %version,
+                    "Created new device"
                 );
             }
             Update::DestroyDevice { id } => {
@@ -166,7 +166,7 @@ pub async fn run(
                     )));
                 }
 
-                tracing::info!("Destroyed device {}", id);
+                tracing::info!(id = %id, "Destroyed device");
             }
             Update::Event { id, event } => {
                 let writer = writers.get_mut(&id).ok_or_else(|| {
@@ -178,7 +178,7 @@ pub async fn run(
 
                 writer.write(&event).await.map_err(Error::Input)?;
 
-                tracing::trace!("Wrote an event to device {}", id);
+                tracing::trace!(id = %id, "Wrote an event to device");
             }
             Update::Ping => {
                 let duration = start.elapsed();

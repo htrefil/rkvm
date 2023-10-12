@@ -56,7 +56,7 @@ pub async fn timeout<T: Future<Output = Result<U, Error>>, U>(
 ) -> Result<U, Error> {
     time::timeout(duration, future)
         .await
-        .map_err(|err| Error::new(ErrorKind::TimedOut, err))?
+        .map_err(|_| Error::new(ErrorKind::TimedOut, "Message timeout"))?
 }
 
 #[cfg(test)]

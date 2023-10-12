@@ -159,7 +159,7 @@ pub async fn run(
                                     }
                                 }
 
-                                tracing::trace!("Wrote an event to device {}", id);
+                                tracing::trace!(id = %id, "Wrote an event to device");
                             }
                         }
                     }
@@ -168,12 +168,12 @@ pub async fn run(
                 let device = &devices[id];
 
                 tracing::info!(
-                    "Registered new device {} (name {:?}, vendor {}, product {}, version {})",
-                    id,
-                    device.name,
-                    device.vendor,
-                    device.product,
-                    device.version
+                    id = %id,
+                    name = ?device.name,
+                    vendor = %device.vendor,
+                    product = %device.product,
+                    version = %device.version,
+                    "Registered new device"
                 );
             }
             (id, result) = event => match result {
@@ -257,7 +257,7 @@ pub async fn run(
                     }
                     devices.remove(id);
 
-                    tracing::info!("Destroyed device {}", id);
+                    tracing::info!(id = %id, "Destroyed device");
                 }
                 Err(err) => return Err(Error::Input(err)),
             }
