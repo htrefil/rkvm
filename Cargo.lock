@@ -803,7 +803,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-certificate-gen"
-version = "0.4.1"
+version = "0.5.1"
 dependencies = [
  "clap",
  "tempfile",
@@ -812,7 +812,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-client"
-version = "0.4.1"
+version = "0.5.1"
 dependencies = [
  "clap",
  "env_logger",
@@ -863,7 +863,7 @@ dependencies = [
 
 [[package]]
 name = "rkvm-server"
-version = "0.4.1"
+version = "0.5.1"
 dependencies = [
  "clap",
  "env_logger",
