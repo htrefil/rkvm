@@ -119,4 +119,10 @@ mod tests {
 
         assert_eq!(parsed_ip, Ipv6Addr::from_str("::1").unwrap());
     }
+
+    #[test]
+    fn example_parses() {
+        let config = include_str!("../../example/client.toml");
+        toml::from_str::<Config>(config).unwrap();
+    }
 }

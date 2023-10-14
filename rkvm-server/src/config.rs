@@ -1226,3 +1226,14 @@ impl Into<Key> for SwitchKey {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn example_parses() {
+        let config = include_str!("../../example/server.toml");
+        toml::from_str::<Config>(config).unwrap();
+    }
+}
