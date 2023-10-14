@@ -38,6 +38,7 @@ pub async fn run(
     acceptor: TlsAcceptor,
     password: &str,
     switch_keys: &HashSet<Key>,
+    propagate_switch_keys: bool,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     tracing::info!("Listening on {}", listen);
@@ -219,6 +220,10 @@ pub async fn run(
                                 changed = false;
                             }
                         }
+                    }
+
+                    if press && !propagate_switch_keys {
+                        continue;
                     }
 
                     let events = [event]
