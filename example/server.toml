@@ -3,6 +3,9 @@ listen = "0.0.0.0:5258"
 switch-keys = ["left-alt", "left-ctrl"]
 certificate = "/etc/rkvm/certificate.pem"
 key = "/etc/rkvm/key.pem"
+# Specify the list of input devices to register in the following array,
+# or leave the array emtpy to register all detected input devices.
+device-names = []
 
 # This is to prevent malicious clients from connecting to the server.
 # Make sure this matches your client's config.
