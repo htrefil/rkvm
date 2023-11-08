@@ -68,9 +68,10 @@ async fn main() -> ExitCode {
     };
 
     let switch_keys = config.switch_keys.into_iter().map(Into::into).collect();
+    let device_names = config.device_names;
 
     tokio::select! {
-        result = server::run(config.listen, acceptor, &config.password, &switch_keys) => {
+        result = server::run(config.listen, acceptor, &config.password, &switch_keys, &device_names) => {
             if let Err(err) = result {
                 tracing::error!("Error: {}", err);
                 return ExitCode::FAILURE;
