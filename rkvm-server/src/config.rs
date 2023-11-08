@@ -12,6 +12,7 @@ pub struct Config {
     pub key: PathBuf,
     pub password: String,
     pub switch_keys: HashSet<SwitchKey>,
+    pub device_names: HashSet<String>,
 }
 
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
