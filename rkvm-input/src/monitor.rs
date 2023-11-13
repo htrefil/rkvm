@@ -7,6 +7,7 @@ use std::ffi::OsStr;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
+use std::fs::canonicalize;
 use tokio::fs;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
@@ -19,7 +20,8 @@ pub struct Monitor {
 impl Monitor {
     pub fn new(input_device_paths: &HashSet<String>) -> Self {
         let (sender, receiver) = mpsc::channel(1);
-        tokio::spawn(monitor(sender, input_device_paths.clone()));
+        let absolute_input_device_paths = canonicalize_input_device_paths(input_device_paths);
+        tokio::spawn(monitor(sender, absolute_input_device_paths));
 
         Self { receiver }
     }
@@ -96,6 +98,30 @@ async fn monitor(sender: Sender<Result<Interceptor, Error>>, input_device_paths:
         },
         _ = sender.closed() => {}
     }
+}
+
+fn canonicalize_input_device_paths(input_device_paths: &HashSet<String>) -> HashSet<String> {
+    let mut absolute_paths = HashSet::new();
+    for path in input_device_paths {
+        match canonicalize(path) {
+            Ok(abs_path) => {
+                match abs_path.into_os_string().into_string() {
+                    Ok(ap) => {
+                        absolute_paths.insert(ap);
+                    },
+                    Err(err) => {
+                        tracing::error!("Failed to convert absolute path into string {:?}", err);
+                        continue;
+                    },
+                }
+            },
+            Err(err) => {
+                tracing::error!("Failed to canonicalize a path: {}", err);
+                continue;
+            },
+        }
+    }
+    return absolute_paths;
 }
 
 fn register_input_device(input_device_paths: &HashSet<String>, input_device_path: PathBuf) -> bool {
