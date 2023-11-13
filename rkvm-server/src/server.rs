@@ -38,7 +38,6 @@ pub async fn run(
     acceptor: TlsAcceptor,
     password: &str,
     switch_keys: &HashSet<Key>,
-    device_names: &HashSet<String>,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     tracing::info!("Listening on {}", listen);
@@ -110,87 +109,72 @@ pub async fn run(
                 let abs = interceptor.abs().collect::<HashMap<_,_>>();
                 let keys = interceptor.key().collect::<HashSet<_>>();
 
-                let mut register_input_device = false;
+                for (_, (sender, _)) in &clients {
+                    let update = Update::CreateDevice {
+                        id,
+                        name: name.clone(),
+                        version: version.clone(),
+                        vendor: vendor.clone(),
+                        product: product.clone(),
+                        rel: rel.clone(),
+                        abs: abs.clone(),
+                        keys: keys.clone(),
+                    };
 
-                if device_names.len() > 0 {
-                    for device_name in device_names {
-                        if name.to_str().unwrap().contains(device_name) {
-                            register_input_device = true;
-                            break;
-                        }
-                    }
-                } else {
-                    register_input_device = true;
+                    let _ = sender.send(update).await;
                 }
 
-                if register_input_device {
-                    for (_, (sender, _)) in &clients {
-                        let update = Update::CreateDevice {
-                            id,
-                            name: name.clone(),
-                            version: version.clone(),
-                            vendor: vendor.clone(),
-                            product: product.clone(),
-                            rel: rel.clone(),
-                            abs: abs.clone(),
-                            keys: keys.clone(),
-                        };
+                let (interceptor_sender, mut interceptor_receiver) = mpsc::channel(32);
+                devices.insert(Device {
+                    name,
+                    version,
+                    vendor,
+                    product,
+                    rel,
+                    abs,
+                    keys,
+                    sender: interceptor_sender,
+                });
 
-                        let _ = sender.send(update).await;
-                    }
+                let events_sender = events_sender.clone();
+                tokio::spawn(async move {
+                    loop {
+                        tokio::select! {
+                            event = interceptor.read() => {
+                                if event.is_err() | events_sender.send((id, event)).await.is_err() {
+                                    break;
+                                }
+                            }
+                            event = interceptor_receiver.recv() => {
+                                let event = match event {
+                                    Some(event) => event,
+                                    None => break,
+                                };
 
-                    let (interceptor_sender, mut interceptor_receiver) = mpsc::channel(32);
-                    devices.insert(Device {
-                        name,
-                        version,
-                        vendor,
-                        product,
-                        rel,
-                        abs,
-                        keys,
-                        sender: interceptor_sender,
-                    });
-
-                    let events_sender = events_sender.clone();
-                    tokio::spawn(async move {
-                        loop {
-                            tokio::select! {
-                                event = interceptor.read() => {
-                                    if event.is_err() | events_sender.send((id, event)).await.is_err() {
+                                match interceptor.write(&event).await {
+                                    Ok(()) => {},
+                                    Err(err) => {
+                                        let _ = events_sender.send((id, Err(err))).await;
                                         break;
                                     }
                                 }
-                                event = interceptor_receiver.recv() => {
-                                    let event = match event {
-                                        Some(event) => event,
-                                        None => break,
-                                    };
 
-                                    match interceptor.write(&event).await {
-                                        Ok(()) => {},
-                                        Err(err) => {
-                                            let _ = events_sender.send((id, Err(err))).await;
-                                            break;
-                                        }
-                                    }
-
-                                    tracing::trace!(id = %id, "Wrote an event to device");
-                                }
+                                tracing::trace!(id = %id, "Wrote an event to device");
                             }
                         }
-                    });
+                    }
+                });
 
-                    let device = &devices[id];
+                let device = &devices[id];
 
-                    tracing::info!(
-                        id = %id,
-                        name = ?device.name,
-                        vendor = %device.vendor,
-                        product = %device.product,
-                        version = %device.version,
-                        "Registered new device"
-                    );
-                }
+                tracing::info!(
+                    id = %id,
+                    name = ?device.name,
+                    vendor = %device.vendor,
+                    product = %device.product,
+                    version = %device.version,
+                    "Registered new device"
+                );
             }
             (id, result) = event => match result {
                 Ok(event) => {
