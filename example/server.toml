@@ -3,6 +3,15 @@ listen = "0.0.0.0:5258"
 switch-keys = ["left-alt", "left-ctrl"]
 certificate = "/etc/rkvm/certificate.pem"
 key = "/etc/rkvm/key.pem"
+# Specify a list of absolute paths to input device event file that are
+# to be registered by the server in the following array, or leave the
+# array emtpy to register all detected input devices.
+#
+# You can find symlinks that point to event file of each input device
+# in the `/dev/input/by-id/` folder. These can also be used in the
+# following array (make sure to input the absolute path of the
+# symlinks).
+input-device-paths = []
 
 # This is to prevent malicious clients from connecting to the server.
 # Make sure this matches your client's config.

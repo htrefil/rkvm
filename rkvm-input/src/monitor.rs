@@ -5,7 +5,9 @@ use futures::StreamExt;
 use inotify::{Inotify, WatchMask};
 use std::ffi::OsStr;
 use std::io::{Error, ErrorKind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::collections::HashSet;
+use std::fs::canonicalize;
 use tokio::fs;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
@@ -16,9 +18,10 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new() -> Self {
+    pub fn new(input_device_paths: &HashSet<String>) -> Self {
         let (sender, receiver) = mpsc::channel(1);
-        tokio::spawn(monitor(sender));
+        let absolute_input_device_paths = canonicalize_input_device_paths(input_device_paths);
+        tokio::spawn(monitor(sender, absolute_input_device_paths));
 
         Self { receiver }
     }
@@ -31,7 +34,7 @@ impl Monitor {
     }
 }
 
-async fn monitor(sender: Sender<Result<Interceptor, Error>>) {
+async fn monitor(sender: Sender<Result<Interceptor, Error>>, input_device_paths: HashSet<String>) {
     let run = async {
         let registry = Registry::new();
 
@@ -70,14 +73,16 @@ async fn monitor(sender: Sender<Result<Interceptor, Error>>) {
                 continue;
             }
 
-            let interceptor = match Interceptor::open(&path, &registry).await {
-                Ok(interceptor) => interceptor,
-                Err(OpenError::Io(err)) => return Err(err),
-                Err(OpenError::NotAppliable) => continue,
-            };
+            if register_input_device(&input_device_paths, path.clone()) {
+                let interceptor = match Interceptor::open(&path, &registry).await {
+                    Ok(interceptor) => interceptor,
+                    Err(OpenError::Io(err)) => return Err(err),
+                    Err(OpenError::NotAppliable) => continue,
+                };
 
-            if sender.send(Ok(interceptor)).await.is_err() {
-                return Ok(());
+                if sender.send(Ok(interceptor)).await.is_err() {
+                    return Ok(());
+                }
             }
         }
 
@@ -92,5 +97,43 @@ async fn monitor(sender: Sender<Result<Interceptor, Error>>) {
             }
         },
         _ = sender.closed() => {}
+    }
+}
+
+fn canonicalize_input_device_paths(input_device_paths: &HashSet<String>) -> HashSet<String> {
+    let mut absolute_paths = HashSet::new();
+    for path in input_device_paths {
+        match canonicalize(path) {
+            Ok(abs_path) => {
+                match abs_path.into_os_string().into_string() {
+                    Ok(ap) => {
+                        absolute_paths.insert(ap);
+                    },
+                    Err(err) => {
+                        tracing::error!("Failed to convert absolute path into string {:?}", err);
+                        continue;
+                    },
+                }
+            },
+            Err(err) => {
+                tracing::error!("Failed to canonicalize a path: {}", err);
+                continue;
+            },
+        }
+    }
+    return absolute_paths;
+}
+
+fn register_input_device(input_device_paths: &HashSet<String>, input_device_path: PathBuf) -> bool {
+    if input_device_paths.len() > 0 {
+        match input_device_path.into_os_string().into_string() {
+            Ok(path) => return input_device_paths.contains(&path),
+            Err(err) => {
+                tracing::error!("Can't convert a path into string! {:?}", err);
+                return false;
+            },
+        }
+    } else {
+        return true;
     }
 }

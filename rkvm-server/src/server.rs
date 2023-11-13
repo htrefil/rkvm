@@ -38,11 +38,12 @@ pub async fn run(
     acceptor: TlsAcceptor,
     password: &str,
     switch_keys: &HashSet<Key>,
+    input_device_paths: &HashSet<String>,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     tracing::info!("Listening on {}", listen);
 
-    let mut monitor = Monitor::new();
+    let mut monitor = Monitor::new(input_device_paths);
     let mut devices = Slab::<Device>::new();
     let mut clients = Slab::<(Sender<_>, SocketAddr)>::new();
     let mut current = 0;
