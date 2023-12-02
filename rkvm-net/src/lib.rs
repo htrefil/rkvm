@@ -36,6 +36,8 @@ pub enum Update {
         rel: HashSet<RelAxis>,
         abs: HashMap<AbsAxis, AbsInfo>,
         keys: HashSet<Key>,
+        delay: Option<i32>,
+        period: Option<i32>,
     },
     DestroyDevice {
         id: usize,

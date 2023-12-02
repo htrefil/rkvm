@@ -79,6 +79,8 @@ pub async fn run(
                         rel: device.rel.clone(),
                         abs: device.abs.clone(),
                         keys: device.keys.clone(),
+                        delay: device.delay,
+                        period: device.period,
                     })
                     .collect();
 
@@ -109,6 +111,7 @@ pub async fn run(
                 let rel = interceptor.rel().collect::<HashSet<_>>();
                 let abs = interceptor.abs().collect::<HashMap<_,_>>();
                 let keys = interceptor.key().collect::<HashSet<_>>();
+                let repeat = interceptor.repeat();
 
                 for (_, (sender, _)) in &clients {
                     let update = Update::CreateDevice {
@@ -120,6 +123,8 @@ pub async fn run(
                         rel: rel.clone(),
                         abs: abs.clone(),
                         keys: keys.clone(),
+                        delay: repeat.delay,
+                        period: repeat.period,
                     };
 
                     let _ = sender.send(update).await;
@@ -134,6 +139,8 @@ pub async fn run(
                     rel,
                     abs,
                     keys,
+                    delay: repeat.delay,
+                    period: repeat.period,
                     sender: interceptor_sender,
                 });
 
@@ -278,6 +285,8 @@ struct Device {
     rel: HashSet<RelAxis>,
     abs: HashMap<AbsAxis, AbsInfo>,
     keys: HashSet<Key>,
+    delay: Option<i32>,
+    period: Option<i32>,
     sender: Sender<Event>,
 }
 

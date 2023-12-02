@@ -1,6 +1,6 @@
 mod caps;
 
-pub use caps::{AbsCaps, KeyCaps, RelCaps};
+pub use caps::{AbsCaps, KeyCaps, RelCaps, Repeat};
 
 use crate::abs::{AbsAxis, AbsEvent, ToolType};
 use crate::convert::Convert;
@@ -137,6 +137,10 @@ impl Interceptor {
         KeyCaps::new(self)
     }
 
+    pub fn repeat(&self) -> Repeat {
+        Repeat::new(self)
+    }
+
     async fn read_raw(&mut self) -> Result<(u16, u16, i32), Error> {
         let file = self.evdev.file().unwrap();
 
@@ -234,7 +238,10 @@ impl Interceptor {
         if ret < 0 {
             // We do not use ErrorKind::ResourceBusy because it is a nightly-only API.
             let err = if ret == -libc::EBUSY {
-                tracing::info!("Ignored {:?} because it is busy and can not be grabbed", path);
+                tracing::info!(
+                    "Ignored {:?} because it is busy and can not be grabbed",
+                    path
+                );
                 OpenError::NotAppliable
             } else {
                 Error::from_raw_os_error(-ret).into()

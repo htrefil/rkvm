@@ -155,3 +155,51 @@ impl Iterator for KeyCaps<'_> {
         None
     }
 }
+
+pub struct Repeat {
+    pub delay: Option<i32>,
+    pub period: Option<i32>,
+}
+
+impl Repeat {
+    pub(super) fn new(interceptor: &Interceptor) -> Self {
+        let has = unsafe {
+            glue::libevdev_has_event_code(interceptor.evdev.as_ptr(), glue::EV_REP, glue::REP_DELAY)
+                == 1
+        };
+
+        let delay = if has {
+            Some(unsafe {
+                glue::libevdev_get_event_value(
+                    interceptor.evdev.as_ptr(),
+                    glue::EV_REP,
+                    glue::REP_DELAY,
+                )
+            })
+        } else {
+            None
+        };
+
+        let has = unsafe {
+            glue::libevdev_has_event_code(
+                interceptor.evdev.as_ptr(),
+                glue::EV_REP,
+                glue::REP_PERIOD,
+            ) == 1
+        };
+
+        let period = if has {
+            Some(unsafe {
+                glue::libevdev_get_event_value(
+                    interceptor.evdev.as_ptr(),
+                    glue::EV_REP,
+                    glue::REP_PERIOD,
+                )
+            })
+        } else {
+            None
+        };
+
+        Self { delay, period }
+    }
+}

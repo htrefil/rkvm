@@ -1,3 +1,5 @@
+use libc::c_int;
+
 use crate::abs::{AbsAxis, AbsEvent, AbsInfo};
 use crate::convert::Convert;
 use crate::evdev::Evdev;
@@ -231,6 +233,50 @@ impl WriterBuilder {
             if ret < 0 {
                 return Err(Error::from_raw_os_error(-ret));
             }
+        }
+
+        Ok(self)
+    }
+
+    pub fn delay(self, value: Option<i32>) -> Result<Self, Error> {
+        let value: c_int = match value {
+            Some(value) => value,
+            None => return Ok(self),
+        };
+
+        let ret = unsafe {
+            glue::libevdev_enable_event_code(
+                self.evdev.as_ptr(),
+                glue::EV_REP,
+                glue::REP_DELAY,
+                &value as *const _ as *const _,
+            )
+        };
+
+        if ret < 0 {
+            return Err(Error::from_raw_os_error(-ret));
+        }
+
+        Ok(self)
+    }
+
+    pub fn period(self, value: Option<i32>) -> Result<Self, Error> {
+        let value: c_int = match value {
+            Some(value) => value,
+            None => return Ok(self),
+        };
+
+        let ret = unsafe {
+            glue::libevdev_enable_event_code(
+                self.evdev.as_ptr(),
+                glue::EV_REP,
+                glue::REP_PERIOD,
+                &value as *const _ as *const _,
+            )
+        };
+
+        if ret < 0 {
+            return Err(Error::from_raw_os_error(-ret));
         }
 
         Ok(self)

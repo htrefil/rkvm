@@ -123,6 +123,8 @@ pub async fn run(
                 rel,
                 abs,
                 keys,
+                delay,
+                period,
             } => {
                 let entry = writers.entry(id);
                 if let Entry::Occupied(_) = entry {
@@ -141,6 +143,8 @@ pub async fn run(
                         .rel(rel)?
                         .abs(abs)?
                         .key(keys)?
+                        .delay(delay)?
+                        .period(period)?
                         .build()
                         .await
                 }
