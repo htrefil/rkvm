@@ -1,2 +1,3 @@
 [workspace]
+resolver = "2"
 members = ["rkvm-client", "rkvm-server", "rkvm-input", "rkvm-net", "rkvm-certificate-gen"]
