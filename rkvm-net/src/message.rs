@@ -4,14 +4,12 @@ use serde::Serialize;
 use std::io::{Error, ErrorKind};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-#[async_trait::async_trait]
 pub trait Message: Sized {
     async fn decode<R: AsyncRead + Send + Unpin>(stream: &mut R) -> Result<Self, Error>;
 
     async fn encode<W: AsyncWrite + Send + Unpin>(&self, stream: &mut W) -> Result<(), Error>;
 }
 
-#[async_trait::async_trait]
 impl<T: DeserializeOwned + Serialize + Sync> Message for T {
     async fn decode<R: AsyncRead + Send + Unpin>(stream: &mut R) -> Result<Self, Error> {
         let length = stream.read_u16().await?;

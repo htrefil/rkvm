@@ -17,7 +17,6 @@ impl Display for Version {
     }
 }
 
-#[async_trait::async_trait]
 impl Message for Version {
     async fn decode<R: AsyncRead + Send + Unpin>(stream: &mut R) -> Result<Self, Error> {
         stream.read_u16_le().await.map(Self)

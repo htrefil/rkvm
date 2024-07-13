@@ -1,3 +1,6 @@
+// This is not really public API.
+#![allow(async_fn_in_trait)]
+
 pub mod auth;
 pub mod message;
 pub mod version;
