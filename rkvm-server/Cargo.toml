@@ -1,7 +1,7 @@
 [package]
 name = "rkvm-server"
 license = "MIT"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
 edition = "2021"
 
