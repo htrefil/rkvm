@@ -10,7 +10,6 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.0.1", features = ["macros", "time", "fs", "net", "signal", "rt-multi-thread", "sync"] }
 rkvm-input = { path = "../rkvm-input" }
-rkvm-net = { path = "../rkvm-net" }
 serde = { version = "1.0.117", features = ["derive"] }
 toml = "0.5.7"
 env_logger = "0.8.1"
@@ -20,6 +19,8 @@ tokio-rustls = "0.24.0"
 rustls-pemfile = "1.0.2"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+rkvm-net = { path = "../rkvm-net" }
+rkvm-config = { path = "../rkvm-config" }
 
 [package.metadata.rpm]
 package = "rkvm-client"

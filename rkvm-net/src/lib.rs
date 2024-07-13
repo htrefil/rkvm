@@ -19,15 +19,6 @@ use tokio::time;
 
 pub const PING_INTERVAL: Duration = Duration::from_secs(1);
 
-// Message read timeout (does not apply to updates, only auth negotiation and replies).
-pub const READ_TIMEOUT: Duration = Duration::from_millis(500);
-
-// Message write timeout (applies to all messages).
-pub const WRITE_TIMEOUT: Duration = Duration::from_millis(500);
-
-// TLS negotiation timeout.
-pub const TLS_TIMEOUT: Duration = Duration::from_millis(500);
-
 #[derive(Deserialize, Serialize, Debug)]
 pub enum Update {
     CreateDevice {

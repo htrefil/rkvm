@@ -1,3 +1,4 @@
+use rkvm_config::Timeout;
 use rkvm_input::writer::Writer;
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
@@ -31,6 +32,7 @@ pub async fn run(
     port: u16,
     connector: TlsConnector,
     password: &str,
+    timeout: Timeout,
 ) -> Result<(), Error> {
     // Intentionally don't impose any timeout for TCP connect.
     let stream = match hostname {
@@ -42,18 +44,15 @@ pub async fn run(
 
     tracing::info!("Connected to server");
 
-    let stream = rkvm_net::timeout(
-        rkvm_net::TLS_TIMEOUT,
-        connector.connect(hostname.clone(), stream),
-    )
-    .await
-    .map_err(Error::Network)?;
+    let stream = rkvm_net::timeout(timeout.tls, connector.connect(hostname.clone(), stream))
+        .await
+        .map_err(Error::Network)?;
 
     tracing::info!("TLS connected");
 
     let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
+    rkvm_net::timeout(timeout.write, async {
         Version::CURRENT.encode(&mut stream).await?;
         stream.flush().await?;
 
@@ -62,7 +61,7 @@ pub async fn run(
     .await
     .map_err(Error::Network)?;
 
-    let version = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Version::decode(&mut stream))
+    let version = rkvm_net::timeout(timeout.read, Version::decode(&mut stream))
         .await
         .map_err(Error::Network)?;
 
@@ -73,13 +72,13 @@ pub async fn run(
         });
     }
 
-    let challenge = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthChallenge::decode(&mut stream))
+    let challenge = rkvm_net::timeout(timeout.read, AuthChallenge::decode(&mut stream))
         .await
         .map_err(Error::Network)?;
 
     let response = challenge.respond(password);
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
+    rkvm_net::timeout(timeout.write, async {
         response.encode(&mut stream).await?;
         stream.flush().await?;
 
@@ -88,7 +87,7 @@ pub async fn run(
     .await
     .map_err(Error::Network)?;
 
-    let status = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthStatus::decode(&mut stream))
+    let status = rkvm_net::timeout(timeout.read, AuthStatus::decode(&mut stream))
         .await
         .map_err(Error::Network)?;
 
@@ -101,7 +100,7 @@ pub async fn run(
 
     let mut start = Instant::now();
 
-    let mut interval = time::interval(rkvm_net::PING_INTERVAL + rkvm_net::READ_TIMEOUT);
+    let mut interval = time::interval(rkvm_net::PING_INTERVAL + timeout.read);
     let mut writers = HashMap::new();
 
     // Interval ticks immediately after creation.
@@ -191,7 +190,7 @@ pub async fn run(
                 start = Instant::now();
                 interval.reset();
 
-                rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
+                rkvm_net::timeout(timeout.write, async {
                     Pong.encode(&mut stream).await?;
                     stream.flush().await?;
 

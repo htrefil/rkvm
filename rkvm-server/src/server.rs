@@ -1,3 +1,4 @@
+use rkvm_config::Timeout;
 use rkvm_input::abs::{AbsAxis, AbsInfo};
 use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent};
@@ -39,6 +40,7 @@ pub async fn run(
     password: &str,
     switch_keys: &HashSet<Key>,
     propagate_switch_keys: bool,
+    timeout: Timeout,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     tracing::info!("Listening on {}", listen);
@@ -92,7 +94,7 @@ pub async fn run(
                     async move {
                         tracing::info!("Connected");
 
-                        match client(init_updates, receiver, stream, acceptor, &password).await {
+                        match client(init_updates, receiver, stream, acceptor, &password, timeout).await {
                             Ok(()) => tracing::info!("Disconnected"),
                             Err(err) => tracing::error!("Disconnected: {}", err),
                         }
@@ -308,13 +310,14 @@ async fn client(
     stream: TcpStream,
     acceptor: TlsAcceptor,
     password: &str,
+    timeout: Timeout,
 ) -> Result<(), ClientError> {
-    let stream = rkvm_net::timeout(rkvm_net::TLS_TIMEOUT, acceptor.accept(stream)).await?;
+    let stream = rkvm_net::timeout(timeout.tls, acceptor.accept(stream)).await?;
     tracing::info!("TLS connected");
 
     let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
+    rkvm_net::timeout(timeout.write, async {
         Version::CURRENT.encode(&mut stream).await?;
         stream.flush().await?;
 
@@ -322,7 +325,7 @@ async fn client(
     })
     .await?;
 
-    let version = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Version::decode(&mut stream)).await?;
+    let version = rkvm_net::timeout(timeout.read, Version::decode(&mut stream)).await?;
     if version != Version::CURRENT {
         return Err(ClientError::Version {
             server: Version::CURRENT,
@@ -332,7 +335,7 @@ async fn client(
 
     let challenge = AuthChallenge::generate().await?;
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
+    rkvm_net::timeout(timeout.write, async {
         challenge.encode(&mut stream).await?;
         stream.flush().await?;
 
@@ -340,14 +343,13 @@ async fn client(
     })
     .await?;
 
-    let response =
-        rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthResponse::decode(&mut stream)).await?;
+    let response = rkvm_net::timeout(timeout.read, AuthResponse::decode(&mut stream)).await?;
     let status = match response.verify(&challenge, password) {
         true => AuthStatus::Passed,
         false => AuthStatus::Failed,
     };
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
+    rkvm_net::timeout(timeout.write, async {
         status.encode(&mut stream).await?;
         stream.flush().await?;
 
@@ -386,7 +388,7 @@ async fn client(
         };
 
         let start = Instant::now();
-        rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
+        rkvm_net::timeout(timeout.write, async {
             update.encode(&mut stream).await?;
             stream.flush().await?;
 
@@ -400,7 +402,7 @@ async fn client(
             tracing::debug!(duration = ?duration, "Sent ping");
 
             let start = Instant::now();
-            rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Pong::decode(&mut stream)).await?;
+            rkvm_net::timeout(timeout.read, Pong::decode(&mut stream)).await?;
             let duration = start.elapsed();
 
             tracing::debug!(duration = ?duration, "Received pong");

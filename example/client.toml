@@ -6,3 +6,13 @@ certificate = "/etc/rkvm/certificate.pem"
 #
 # Change this to your own value before deploying rkvm.
 password = "123456789"
+
+# Optional values.
+# Make sure these match what you have in your server's config.
+
+# Message read timeout.
+# read-timeout = "500ms"
+# Message write timeout.
+# write-timeout = "500ms"
+# TLS handshake timeout.
+# tls-timeout = "500ms"

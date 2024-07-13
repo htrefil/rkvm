@@ -1,3 +1,4 @@
+use rkvm_config::Timeout;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Formatter};
@@ -12,6 +13,8 @@ pub struct Config {
     pub server: Server,
     pub certificate: PathBuf,
     pub password: String,
+    #[serde(flatten)]
+    pub timeout: Timeout,
 }
 
 pub struct Server {

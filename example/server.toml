@@ -12,3 +12,13 @@ key = "/etc/rkvm/key.pem"
 #
 # Change this to your own value before deploying rkvm.
 password = "123456789"
+
+# Optional values.
+# Make sure these match what you have in your client's config.
+
+# Message write timeout. Increase this if you are getting timeout errors.
+# read-timeout = "500ms"
+# Message write timeout. Increase this if you are getting timeout errors.
+# write-timeout = "500ms"
+# TLS handshake timeout.
+# tls-timeout = "500ms"

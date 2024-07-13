@@ -57,7 +57,7 @@ async fn main() -> ExitCode {
     };
 
     tokio::select! {
-        result = client::run(&config.server.hostname, config.server.port, connector, &config.password) => {
+        result = client::run(&config.server.hostname, config.server.port, connector, &config.password, config.timeout) => {
             if let Err(err) = result {
                 tracing::error!("Error: {}", err);
                 return ExitCode::FAILURE;
