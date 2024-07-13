@@ -37,12 +37,12 @@ async fn monitor(sender: Sender<Result<Interceptor, Error>>) {
 
         let mut read_dir = fs::read_dir(EVENT_PATH).await?;
 
-        let mut inotify = Inotify::init()?;
-        inotify.add_watch(EVENT_PATH, WatchMask::CREATE)?;
+        let inotify = Inotify::init()?;
+        inotify.watches().add(EVENT_PATH, WatchMask::CREATE)?;
 
         // This buffer size should be OK, since we don't expect a lot of devices
         // to be plugged in frequently.
-        let mut stream = inotify.event_stream([0; 512])?;
+        let mut stream = inotify.into_event_stream([0; 512])?;
 
         loop {
             let path = match read_dir.next_entry().await? {
