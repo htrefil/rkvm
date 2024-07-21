@@ -64,7 +64,8 @@ pub async fn run(
     });
 
     let mut monitor = Monitor::new();
-    let mut devices = Slab::<Device>::new();
+    let mut id = 0usize;
+    let mut devices = HashMap::<usize, Device>::new();
     let mut clients = Slab::<(Sender<_>, SocketAddr)>::new();
     let mut current = 0;
     let mut previous = 0;
@@ -94,7 +95,7 @@ pub async fn run(
                 let init_updates = devices
                     .iter()
                     .map(|(id, device)| Update::CreateDevice {
-                        id,
+                        id: *id,
                         name: device.name.clone(),
                         version: device.version,
                         vendor: device.vendor,
@@ -127,8 +128,9 @@ pub async fn run(
             interceptor = monitor.read() => {
                 let mut interceptor = interceptor.map_err(Error::Input)?;
 
+                id = id.checked_add(1).unwrap();
+
                 let name = interceptor.name().to_owned();
-                let id = devices.vacant_key();
                 let version = interceptor.version();
                 let vendor = interceptor.vendor();
                 let product = interceptor.product();
@@ -155,7 +157,7 @@ pub async fn run(
                 }
 
                 let (interceptor_sender, mut interceptor_receiver) = mpsc::channel(32);
-                devices.insert(Device {
+                devices.insert(id, Device {
                     name,
                     version,
                     vendor,
@@ -197,7 +199,7 @@ pub async fn run(
                     }
                 });
 
-                let device = &devices[id];
+                let device = &devices[&id];
 
                 tracing::info!(
                     id = %id,
@@ -267,8 +269,9 @@ pub async fn run(
                         // In this scenario, the interceptor task is sending events to the main task,
                         // while the main task is simultaneously sending events back to the interceptor.
                         // This creates a classic deadlock situation where both tasks are waiting for each other.
+                        let sender = &devices[&id].sender;
                         for event in events {
-                            match devices[id].sender.try_send(event) {
+                            match sender.try_send(event) {
                                 Ok(()) | Err(TrySendError::Closed(_)) => {},
                                 Err(TrySendError::Full(_)) => return Err(Error::Overflow),
                             }
@@ -291,7 +294,7 @@ pub async fn run(
                     for (_, (sender, _)) in &clients {
                         let _ = sender.send(Update::DestroyDevice { id }).await;
                     }
-                    devices.remove(id);
+                    devices.remove(&id);
 
                     tracing::info!(id = %id, "Destroyed device");
                 }
