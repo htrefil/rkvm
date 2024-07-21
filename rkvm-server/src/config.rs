@@ -13,6 +13,7 @@ pub struct Config {
     pub password: String,
     pub switch_keys: HashSet<SwitchKey>,
     pub propagate_switch_keys: Option<bool>,
+    pub enable_datagrams: Option<bool>,
 }
 
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Hash)]

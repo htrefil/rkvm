@@ -37,6 +37,7 @@ pub async fn run(
     password: &str,
     switch_keys: &HashSet<Key>,
     propagate_switch_keys: bool,
+    enable_datagrams: bool,
 ) -> Result<(), Error> {
     config.transport_config(rkvm_net::transport_config().into());
 
@@ -115,7 +116,7 @@ pub async fn run(
                     async move {
                         tracing::info!("Connected");
 
-                        match client(init_updates, receiver, connection, &password).await {
+                        match client(init_updates, receiver, connection, &password, enable_datagrams).await {
                             Ok(()) => tracing::info!("Disconnected"),
                             Err(err) => tracing::error!("Disconnected: {}", err),
                         }
@@ -354,6 +355,7 @@ async fn client(
     mut receiver: Receiver<Update>,
     connection: Incoming,
     password: &str,
+    mut enable_datagrams: bool,
 ) -> Result<(), ClientError> {
     let connection = connection.await?;
 
@@ -399,7 +401,6 @@ async fn client(
 
     data_write.shutdown().await?;
 
-    let mut enable_datagrams = true;
     let mut datagram_events = Vec::new();
 
     loop {

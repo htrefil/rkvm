@@ -1,9 +1,17 @@
 listen = "0.0.0.0:5258"
 # See `switch-keys.md` in the repository root for the list of all possible keys.
 switch-keys = ["left-alt", "left-ctrl"]
+
 # Whether switch key presses should be propagated on the server and its clients.
 # Optional, defaults to true.
 # propagate-switch-keys = true
+
+# Whether mouse events should be sent as datagrams.
+# Enabling this can improve mouse input latency significantly at the cost of
+# losing mouse events if the network is congested, making mouse appear janky.
+# Optional, defaults to false.
+# enable-datagrams = false
+
 certificate = "/etc/rkvm/certificate.pem"
 key = "/etc/rkvm/key.pem"
 
