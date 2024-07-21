@@ -48,8 +48,8 @@ async fn main() -> ExitCode {
         }
     };
 
-    let connector = match tls::configure(&config.certificate).await {
-        Ok(connector) => connector,
+    let client_config = match tls::configure(&config.certificate).await {
+        Ok(client_config) => client_config,
         Err(err) => {
             tracing::error!("Error configuring TLS: {}", err);
             return ExitCode::FAILURE;
@@ -57,7 +57,7 @@ async fn main() -> ExitCode {
     };
 
     tokio::select! {
-        result = client::run(&config.server.hostname, config.server.port, connector, &config.password) => {
+        result = client::run(&config.server.hostname, config.server.port, client_config, &config.password) => {
             if let Err(err) = result {
                 tracing::error!("Error: {}", err);
                 return ExitCode::FAILURE;

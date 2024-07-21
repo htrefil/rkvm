@@ -5,7 +5,7 @@ use crate::sync::SyncEvent;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Event {
     Rel(RelEvent),
     Abs(AbsEvent),

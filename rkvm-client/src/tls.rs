@@ -1,10 +1,12 @@
+use quinn::crypto::rustls::{NoInitialCipherSuite, QuicClientConfig};
+use quinn::rustls;
+use quinn::rustls::RootCertStore;
+use quinn::ClientConfig;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::fs;
-use tokio_rustls::rustls::{self, Certificate, ClientConfig, RootCertStore};
-use tokio_rustls::TlsConnector;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -12,23 +14,26 @@ pub enum Error {
     Rustls(#[from] rustls::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    NoInitialCipherSuite(#[from] NoInitialCipherSuite),
 }
 
-pub async fn configure(certificate: &Path) -> Result<TlsConnector, Error> {
+pub async fn configure(certificate: &Path) -> Result<ClientConfig, Error> {
     let certificate = fs::read(certificate).await?;
-    let certificates = rustls_pemfile::certs(&mut certificate.as_slice())?;
+    let certificate = rustls_pemfile::certs(&mut &*certificate).collect::<Result<Vec<_>, _>>()?;
 
     let mut store = RootCertStore::empty();
-    for certificate in certificates {
-        store.add(&Certificate(certificate))?;
+    for certificate in certificate {
+        store.add(certificate)?;
     }
 
-    let config = Arc::new(
-        ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(store)
-            .with_no_client_auth(),
-    );
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(store)
+        .with_no_client_auth();
 
-    Ok(config.into())
+    let config = QuicClientConfig::try_from(config)?;
+    let config = Arc::new(config);
+    let config = ClientConfig::new(config);
+
+    Ok(config)
 }

@@ -1,23 +1,31 @@
+use quinn::ClientConfig;
+use quinn::ConnectError;
+use quinn::Connection;
+use quinn::ConnectionError;
+use quinn::Endpoint;
+use rkvm_input::event::Event;
 use rkvm_input::writer::Writer;
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
-use rkvm_net::{Pong, Update};
-use std::collections::hash_map::Entry;
+use rkvm_net::Datagram;
+use rkvm_net::DeviceInfo;
 use std::collections::HashMap;
 use std::io;
-use std::time::Instant;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use thiserror::Error;
-use tokio::io::{AsyncWriteExt, BufStream};
-use tokio::net::TcpStream;
-use tokio::time;
-use tokio_rustls::rustls::ServerName;
-use tokio_rustls::TlsConnector;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
+use tokio::io::BufWriter;
+use tokio::net;
+use tokio::sync::mpsc::{self, Sender};
+use tracing::Instrument;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Network error: {0}")]
-    Network(io::Error),
+    Network(#[from] NetworkError),
     #[error("Input error: {0}")]
     Input(io::Error),
     #[error("Incompatible server version (got {server}, expected {client})")]
@@ -26,45 +34,39 @@ pub enum Error {
     Auth,
 }
 
+#[derive(Error, Debug)]
+pub enum NetworkError {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    Connect(#[from] ConnectError),
+    #[error(transparent)]
+    Connection(#[from] ConnectionError),
+}
+
 pub async fn run(
-    hostname: &ServerName,
+    hostname: &str,
     port: u16,
-    connector: TlsConnector,
+    mut config: ClientConfig,
     password: &str,
 ) -> Result<(), Error> {
-    // Intentionally don't impose any timeout for TCP connect.
-    let stream = match hostname {
-        ServerName::DnsName(name) => TcpStream::connect(&(name.as_ref(), port)).await,
-        ServerName::IpAddress(address) => TcpStream::connect(&(*address, port)).await,
-        _ => unimplemented!("Unhandled rustls ServerName variant: {:?}", hostname),
-    }
-    .map_err(Error::Network)?;
+    config.transport_config(rkvm_net::transport_config().into());
 
-    tracing::info!("Connected to server");
+    let connection = connect(hostname, port, config).await?;
+    let (data_write, data_read) = connection.accept_bi().await.map_err(NetworkError::from)?;
 
-    let stream = rkvm_net::timeout(
-        rkvm_net::TLS_TIMEOUT,
-        connector.connect(hostname.clone(), stream),
-    )
-    .await
-    .map_err(Error::Network)?;
+    let mut data_write = BufWriter::new(data_write);
+    let mut data_read = BufReader::new(data_read);
 
-    tracing::info!("TLS connected");
-
-    let mut stream = BufStream::with_capacity(1024, 1024, stream);
-
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
-        Version::CURRENT.encode(&mut stream).await?;
-        stream.flush().await?;
-
-        Ok(())
-    })
-    .await
-    .map_err(Error::Network)?;
-
-    let version = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Version::decode(&mut stream))
+    Version::CURRENT
+        .encode(&mut data_write)
         .await
-        .map_err(Error::Network)?;
+        .map_err(NetworkError::from)?;
+    data_write.flush().await.map_err(NetworkError::from)?;
+
+    let version = Version::decode(&mut data_read)
+        .await
+        .map_err(NetworkError::from)?;
 
     if version != Version::CURRENT {
         return Err(Error::Version {
@@ -73,24 +75,21 @@ pub async fn run(
         });
     }
 
-    let challenge = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthChallenge::decode(&mut stream))
+    let challenge = AuthChallenge::decode(&mut data_read)
         .await
-        .map_err(Error::Network)?;
+        .map_err(NetworkError::from)?;
 
     let response = challenge.respond(password);
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
-        response.encode(&mut stream).await?;
-        stream.flush().await?;
-
-        Ok(())
-    })
-    .await
-    .map_err(Error::Network)?;
-
-    let status = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthStatus::decode(&mut stream))
+    response
+        .encode(&mut data_write)
         .await
-        .map_err(Error::Network)?;
+        .map_err(NetworkError::from)?;
+    data_write.flush().await.map_err(NetworkError::from)?;
+
+    let status = AuthStatus::decode(&mut data_read)
+        .await
+        .map_err(NetworkError::from)?;
 
     match status {
         AuthStatus::Passed => {}
@@ -99,110 +98,235 @@ pub async fn run(
 
     tracing::info!("Authenticated successfully");
 
-    let mut start = Instant::now();
+    data_write.shutdown().await.map_err(NetworkError::from)?;
 
-    let mut interval = time::interval(rkvm_net::PING_INTERVAL + rkvm_net::READ_TIMEOUT);
-    let mut writers = HashMap::new();
+    let (error_sender, mut error_receiver) = mpsc::channel(1);
+    let (device_sender, mut device_receiver) = mpsc::channel(1);
 
-    // Interval ticks immediately after creation.
-    interval.tick().await;
+    let mut devices = HashMap::new();
 
     loop {
-        let update = tokio::select! {
-            update = Update::decode(&mut stream) => update.map_err(Error::Network)?,
-            _ = interval.tick() => return Err(Error::Network(io::Error::new(io::ErrorKind::TimedOut, "Ping timed out"))),
+        let device = async { device_receiver.recv().await.unwrap() };
+        let read = tokio::select! {
+            read = connection.accept_uni() => read.map_err(NetworkError::from)?,
+            device = device => {
+                match device {
+                    DeviceEvent::Create { id, sender } => {
+                        if devices.insert(id, sender).is_some() {
+                            return Err(NetworkError::from(io::Error::new(io::ErrorKind::AlreadyExists, "Device already exists")).into());
+                        }
+
+                        continue;
+                    }
+                    DeviceEvent::Destroy { id } => {
+                        devices.remove(&id).unwrap();
+                        continue;
+                    }
+                }
+            }
+            datagram = connection.read_datagram() => {
+                let datagram = datagram.map_err(NetworkError::from)?;
+                let datagram = Datagram::decode(&mut &*datagram).await.map_err(NetworkError::from)?;
+
+                let sender = match devices.get(&datagram.id) {
+                    Some(sender) => sender,
+                    None => {
+                        tracing::warn!(id = %datagram.id, "Received datagram for unknown device");
+                        continue;
+                    }
+                };
+
+                let _ = sender.send(datagram.events.into_owned()).await;
+                continue;
+            }
+            err = error_receiver.recv() => return Err(err.unwrap()),
         };
 
-        match update {
-            Update::CreateDevice {
-                id,
-                name,
-                vendor,
-                product,
-                version,
-                rel,
-                abs,
-                keys,
-                delay,
-                period,
-            } => {
-                let entry = writers.entry(id);
-                if let Entry::Occupied(_) = entry {
-                    return Err(Error::Network(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Server created the same device twice",
-                    )));
+        let stream_id = read.id();
+
+        let read = BufReader::new(read);
+
+        let error_sender = error_sender.clone();
+        let device_sender = device_sender.clone();
+        let span = tracing::debug_span!("stream", id = %stream_id);
+
+        tokio::spawn(
+            async move {
+                tracing::debug!("Stream connected");
+
+                match stream(read, device_sender).await {
+                    Ok(()) => {
+                        tracing::debug!("Stream disconnected");
+                    }
+                    Err(err) => {
+                        tracing::debug!("Stream disconnected: {}", err);
+                        let _ = error_sender.send(err).await;
+                    }
                 }
+            }
+            .instrument(span),
+        );
+    }
+}
 
-                let writer = async {
-                    Writer::builder()?
-                        .name(&name)
-                        .vendor(vendor)
-                        .product(product)
-                        .version(version)
-                        .rel(rel)?
-                        .abs(abs)?
-                        .key(keys)?
-                        .delay(delay)?
-                        .period(period)?
-                        .build()
-                        .await
+async fn connect(
+    hostname: &str,
+    port: u16,
+    config: ClientConfig,
+) -> Result<Connection, NetworkError> {
+    let mut last_err = None;
+
+    let addrs = net::lookup_host((hostname, port))
+        .await
+        .map_err(NetworkError::from)?;
+
+    for addr in addrs {
+        let bind = match addr {
+            SocketAddr::V4(_) => (Ipv4Addr::UNSPECIFIED, 0).into(),
+            SocketAddr::V6(_) => (Ipv6Addr::UNSPECIFIED, 0).into(),
+        };
+
+        let endpoint = match Endpoint::client(bind) {
+            Ok(endpoint) => endpoint,
+            Err(err) => {
+                tracing::debug!(addr = %addr, "Error binding: {}", err);
+                last_err = Some(err.into());
+                continue;
+            }
+        };
+
+        let connection = match endpoint.connect_with(config.clone(), addr, hostname) {
+            Ok(connection) => connection,
+            Err(err) => {
+                tracing::debug!(addr = %addr, "Error connecting: {}", err);
+                last_err = Some(err.into());
+                continue;
+            }
+        };
+
+        let connection = match connection.await {
+            Ok(connection) => connection,
+            Err(err) => {
+                tracing::debug!(addr = %addr, "Error connecting: {}", err);
+                last_err = Some(err.into());
+                continue;
+            }
+        };
+
+        tracing::info!(addr = %addr, "Connected");
+
+        return Ok(connection);
+    }
+
+    Err(last_err.unwrap_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "No addresses resolved").into()
+    }))
+}
+
+enum DeviceEvent {
+    Create {
+        id: usize,
+        sender: Sender<Vec<Event>>,
+    },
+    Destroy {
+        id: usize,
+    },
+}
+
+async fn stream<T: AsyncRead + Send + Unpin + 'static>(
+    mut read: T,
+    device_sender: Sender<DeviceEvent>,
+) -> Result<(), Error> {
+    let device_info = DeviceInfo::decode(&mut read)
+        .await
+        .map_err(NetworkError::from)?;
+
+    let id = device_info.id;
+    let span = tracing::info_span!("device", id = ?device_info.id);
+
+    let mut writer = build(device_info).await.map_err(Error::Input)?;
+
+    let (datagram_sender, mut datagram_receiver) = mpsc::channel(1);
+
+    let event = DeviceEvent::Create {
+        id,
+        sender: datagram_sender,
+    };
+
+    if device_sender.send(event).await.is_err() {
+        return Ok(());
+    }
+
+    let (event_sender, mut event_receiver) = mpsc::channel(1);
+    tokio::spawn(
+        async move {
+            loop {
+                let event = tokio::select! {
+                    event = Event::decode(&mut read) => event,
+                    _ = event_sender.closed() => break,
+                };
+
+                if event.is_err() | event_sender.send(event).await.is_err() {
+                    break;
                 }
-                .await
-                .map_err(Error::Input)?;
-
-                entry.or_insert(writer);
-
-                tracing::info!(
-                    id = %id,
-                    name = ?name,
-                    vendor = %vendor,
-                    product = %product,
-                    version = %version,
-                    "Created new device"
-                );
-            }
-            Update::DestroyDevice { id } => {
-                if writers.remove(&id).is_none() {
-                    return Err(Error::Network(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Server destroyed a nonexistent device",
-                    )));
-                }
-
-                tracing::info!(id = %id, "Destroyed device");
-            }
-            Update::Event { id, event } => {
-                let writer = writers.get_mut(&id).ok_or_else(|| {
-                    Error::Network(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Server sent an event to a nonexistent device",
-                    ))
-                })?;
-
-                writer.write(&event).await.map_err(Error::Input)?;
-
-                tracing::trace!(id = %id, "Wrote an event to device");
-            }
-            Update::Ping => {
-                let duration = start.elapsed();
-                tracing::debug!(duration = ?duration, "Received ping");
-
-                start = Instant::now();
-                interval.reset();
-
-                rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
-                    Pong.encode(&mut stream).await?;
-                    stream.flush().await?;
-
-                    Ok(())
-                })
-                .await
-                .map_err(Error::Network)?;
-
-                let duration = start.elapsed();
-                tracing::debug!(duration = ?duration, "Sent pong");
             }
         }
+        .instrument(span.clone()),
+    );
+
+    let result = async move {
+        loop {
+            let event = async { event_receiver.recv().await.unwrap() };
+
+            tokio::select! {
+                event = event => {
+                    let event = event.map_err(NetworkError::from)?;
+                    writer.write(&event).await.map_err(Error::Input)?;
+                }
+                datagram = datagram_receiver.recv() => {
+                    let datagram = match datagram {
+                        Some(datagram) => datagram,
+                        None => break,
+                    };
+
+                    for event in datagram {
+                        writer.write(&event).await.map_err(Error::Input)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
+    .instrument(span)
+    .await;
+
+    let _ = device_sender.send(DeviceEvent::Destroy { id }).await;
+
+    result
+}
+
+async fn build(device_info: DeviceInfo) -> Result<Writer, io::Error> {
+    let writer = Writer::builder()?
+        .name(&device_info.name)
+        .vendor(device_info.vendor)
+        .product(device_info.product)
+        .version(device_info.version)
+        .rel(device_info.rel)?
+        .abs(device_info.abs)?
+        .key(device_info.keys)?
+        .delay(device_info.delay)?
+        .period(device_info.period)?
+        .build()
+        .await?;
+
+    tracing::info!(
+        name = ?device_info.name,
+        vendor = %device_info.vendor,
+        product = %device_info.product,
+        version = %device_info.version,
+        "Created new device"
+    );
+
+    Ok(writer)
 }

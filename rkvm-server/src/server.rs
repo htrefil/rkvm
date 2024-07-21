@@ -1,3 +1,4 @@
+use quinn::{ConnectionError, Endpoint, Incoming, SendDatagramError, ServerConfig};
 use rkvm_input::abs::{AbsAxis, AbsInfo};
 use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent};
@@ -7,20 +8,17 @@ use rkvm_input::sync::SyncEvent;
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
-use rkvm_net::{Pong, Update};
+use rkvm_net::{Datagram, DeviceInfo};
 use slab::Slab;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
 use std::io::{self, ErrorKind};
+use std::iter;
 use std::net::SocketAddr;
-use std::time::Instant;
 use thiserror::Error;
-use tokio::io::{AsyncWriteExt, BufStream};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader, BufWriter};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time;
-use tokio_rustls::TlsAcceptor;
 use tracing::Instrument;
 
 #[derive(Error, Debug)]
@@ -35,13 +33,34 @@ pub enum Error {
 
 pub async fn run(
     listen: SocketAddr,
-    acceptor: TlsAcceptor,
+    mut config: ServerConfig,
     password: &str,
     switch_keys: &HashSet<Key>,
     propagate_switch_keys: bool,
 ) -> Result<(), Error> {
-    let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
+    config.transport_config(rkvm_net::transport_config().into());
+
+    let endpoint = Endpoint::server(config, listen).map_err(Error::Network)?;
     tracing::info!("Listening on {}", listen);
+
+    let (connection_sender, mut connection_receiver) = mpsc::channel(1);
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                connection = endpoint.accept() => {
+                    let connection = match connection {
+                        Some(connection) => connection,
+                        None => break,
+                    };
+
+                    if connection_sender.send(connection).await.is_err() {
+                        break;
+                    }
+                }
+                _ = connection_sender.closed() => break,
+            }
+        }
+    });
 
     let mut monitor = Monitor::new();
     let mut devices = Slab::<Device>::new();
@@ -52,14 +71,17 @@ pub async fn run(
     let mut pressed_keys = HashSet::new();
 
     let (events_sender, mut events_receiver) = mpsc::channel(1);
-
     loop {
         let event = async { events_receiver.recv().await.unwrap() };
 
         tokio::select! {
-            result = listener.accept() => {
-                let (stream, addr) = result.map_err(Error::Network)?;
-                let acceptor = acceptor.clone();
+            connection = connection_receiver.recv() => {
+                let connection = match connection {
+                    Some(connection) => connection,
+                    None => break,
+                };
+
+                let addr = connection.remote_address();
                 let password = password.to_owned();
 
                 // Remove dead clients.
@@ -87,12 +109,13 @@ pub async fn run(
                 let (sender, receiver) = mpsc::channel(1);
                 clients.insert((sender, addr));
 
-                let span = tracing::info_span!("connection", addr = %addr);
+                let span = tracing::info_span!("client", addr = %addr);
+
                 tokio::spawn(
                     async move {
                         tracing::info!("Connected");
 
-                        match client(init_updates, receiver, stream, acceptor, &password).await {
+                        match client(init_updates, receiver, connection, &password).await {
                             Ok(()) => tracing::info!("Disconnected"),
                             Err(err) => tracing::error!("Disconnected: {}", err),
                         }
@@ -100,8 +123,8 @@ pub async fn run(
                     .instrument(span),
                 );
             }
-            result = monitor.read() => {
-                let mut interceptor = result.map_err(Error::Input)?;
+            interceptor = monitor.read() => {
+                let mut interceptor = interceptor.map_err(Error::Input)?;
 
                 let name = interceptor.name().to_owned();
                 let id = devices.vacant_key();
@@ -275,8 +298,30 @@ pub async fn run(
             }
         }
     }
-}
 
+    Ok(())
+}
+enum Update {
+    CreateDevice {
+        id: usize,
+        name: CString,
+        vendor: u16,
+        product: u16,
+        version: u16,
+        rel: HashSet<RelAxis>,
+        abs: HashMap<AbsAxis, AbsInfo>,
+        keys: HashSet<Key>,
+        delay: Option<i32>,
+        period: Option<i32>,
+    },
+    DestroyDevice {
+        id: usize,
+    },
+    Event {
+        id: usize,
+        event: Event,
+    },
+}
 struct Device {
     name: CString,
     vendor: u16,
@@ -300,29 +345,27 @@ enum ClientError {
     Auth,
     #[error(transparent)]
     Rand(#[from] rand::Error),
+    #[error(transparent)]
+    Connection(#[from] ConnectionError),
 }
 
 async fn client(
     mut init_updates: VecDeque<Update>,
     mut receiver: Receiver<Update>,
-    stream: TcpStream,
-    acceptor: TlsAcceptor,
+    connection: Incoming,
     password: &str,
 ) -> Result<(), ClientError> {
-    let stream = rkvm_net::timeout(rkvm_net::TLS_TIMEOUT, acceptor.accept(stream)).await?;
-    tracing::info!("TLS connected");
+    let connection = connection.await?;
 
-    let mut stream = BufStream::with_capacity(1024, 1024, stream);
+    let (data_write, data_read) = connection.open_bi().await?;
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
-        Version::CURRENT.encode(&mut stream).await?;
-        stream.flush().await?;
+    let mut data_write = BufWriter::new(data_write);
+    let mut data_read = BufReader::new(data_read);
 
-        Ok(())
-    })
-    .await?;
+    Version::CURRENT.encode(&mut data_write).await?;
+    data_write.flush().await?;
 
-    let version = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Version::decode(&mut stream)).await?;
+    let version = Version::decode(&mut data_read).await?;
     if version != Version::CURRENT {
         return Err(ClientError::Version {
             server: Version::CURRENT,
@@ -332,28 +375,18 @@ async fn client(
 
     let challenge = AuthChallenge::generate().await?;
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
-        challenge.encode(&mut stream).await?;
-        stream.flush().await?;
+    challenge.encode(&mut data_write).await?;
+    data_write.flush().await?;
 
-        Ok(())
-    })
-    .await?;
+    let response = AuthResponse::decode(&mut data_read).await?;
 
-    let response =
-        rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthResponse::decode(&mut stream)).await?;
     let status = match response.verify(&challenge, password) {
         true => AuthStatus::Passed,
         false => AuthStatus::Failed,
     };
 
-    rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
-        status.encode(&mut stream).await?;
-        stream.flush().await?;
-
-        Ok(())
-    })
-    .await?;
+    status.encode(&mut data_write).await?;
+    data_write.flush().await?;
 
     if status == AuthStatus::Failed {
         return Err(ClientError::Auth);
@@ -361,10 +394,16 @@ async fn client(
 
     tracing::info!("Authenticated successfully");
 
-    let mut interval = time::interval(rkvm_net::PING_INTERVAL);
+    let mut senders = HashMap::new();
+    let (error_sender, mut error_receiver) = mpsc::channel(1);
+
+    data_write.shutdown().await?;
+
+    let mut enable_datagrams = true;
+    let mut datagram_events = Vec::new();
 
     loop {
-        let recv = async {
+        let update = async {
             match init_updates.pop_front() {
                 Some(update) => Some(update),
                 None => receiver.recv().await,
@@ -372,12 +411,9 @@ async fn client(
         };
 
         let update = tokio::select! {
-            // Make sure pings have priority.
-            // The client could time out otherwise.
-            biased;
-
-            _ = interval.tick() => Some(Update::Ping),
-            recv = recv => recv,
+            update = update => update,
+            err = connection.closed() => return Err(err.into()),
+            err = error_receiver.recv() => return Err(err.unwrap()),
         };
 
         let update = match update {
@@ -385,29 +421,161 @@ async fn client(
             None => break,
         };
 
-        let start = Instant::now();
-        rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
-            update.encode(&mut stream).await?;
-            stream.flush().await?;
+        match update {
+            Update::CreateDevice {
+                id,
+                name,
+                vendor,
+                product,
+                version,
+                rel,
+                abs,
+                keys,
+                delay,
+                period,
+            } => {
+                let write = connection.open_uni().await?;
+                let stream_id = write.id();
 
-            Ok(())
-        })
-        .await?;
-        let duration = start.elapsed();
+                let mut write = BufWriter::new(write);
 
-        if let Update::Ping = update {
-            // Keeping these as debug because it's not as frequent as other updates.
-            tracing::debug!(duration = ?duration, "Sent ping");
+                let device_info = DeviceInfo {
+                    id,
+                    name,
+                    vendor,
+                    product,
+                    version,
+                    rel,
+                    abs,
+                    keys,
+                    delay,
+                    period,
+                };
 
-            let start = Instant::now();
-            rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Pong::decode(&mut stream)).await?;
-            let duration = start.elapsed();
+                let (device_sender, stream_receiver) = mpsc::channel(1);
+                senders.insert(id, device_sender);
 
-            tracing::debug!(duration = ?duration, "Received pong");
+                let error_sender = error_sender.clone();
+                let span = tracing::debug_span!("stream", id = %stream_id);
+
+                tokio::spawn(
+                    async move {
+                        tracing::debug!("Stream connected");
+
+                        match stream(&mut write, &device_info, stream_receiver).await {
+                            Ok(()) => tracing::debug!("Stream disconnected"),
+                            Err(err) => {
+                                tracing::debug!("Stream disconnected: {}", err);
+                                let _ = error_sender.send(err).await;
+                            }
+                        }
+                    }
+                    .instrument(span),
+                );
+            }
+            Update::DestroyDevice { id } => {
+                senders.remove(&id).unwrap();
+            }
+            Update::Event { id, event } => match event {
+                Event::Rel(_) if enable_datagrams => {
+                    datagram_events.push(event);
+                }
+                Event::Sync(SyncEvent::All) if enable_datagrams && !datagram_events.is_empty() => {
+                    datagram_events.push(event);
+
+                    let mut message = Vec::new();
+                    Datagram {
+                        id,
+                        events: datagram_events.as_slice().into(),
+                    }
+                    .encode(&mut message)
+                    .await?;
+
+                    let length = message.len();
+
+                    let err = match connection.send_datagram(message.into()) {
+                        Ok(()) => {
+                            tracing::trace!(
+                                "Wrote {} unreliable event{}",
+                                datagram_events.len(),
+                                if datagram_events.len() == 1 { "" } else { "s" }
+                            );
+
+                            datagram_events.clear();
+                            continue;
+                        }
+                        Err(err) => err,
+                    };
+
+                    match err {
+                        SendDatagramError::UnsupportedByPeer
+                        | SendDatagramError::Disabled
+                        | SendDatagramError::TooLarge => {
+                            let sender = &senders[&id];
+                            for event in datagram_events.drain(..) {
+                                let _ = sender.send(event).await;
+                            }
+
+                            if matches!(err, SendDatagramError::TooLarge) {
+                                tracing::warn!(length = %length, "Datagram too large");
+                            } else {
+                                tracing::warn!("Disabling datagram support: {}", err);
+                                enable_datagrams = false;
+                            }
+                        }
+                        SendDatagramError::ConnectionLost(err) => return Err(err.into()),
+                    }
+                }
+                _ => {
+                    // Send only consecutive relative events as datagrams.
+                    let sender = &senders[&id];
+                    for event in datagram_events.drain(..).chain(iter::once(event)) {
+                        let _ = sender.send(event).await;
+                    }
+                }
+            },
         }
-
-        tracing::trace!("Wrote an update");
     }
 
     Ok(())
+}
+
+async fn stream<T: AsyncWrite + Send + Unpin>(
+    write: &mut T,
+    device_info: &DeviceInfo,
+    mut receiver: Receiver<Event>,
+) -> Result<(), ClientError> {
+    let span = tracing::info_span!("device", id = device_info.id);
+
+    async {
+        device_info.encode(write).await?;
+        write.flush().await?;
+
+        let mut events = 0usize;
+
+        while let Some(event) = receiver.recv().await {
+            event.encode(write).await?;
+            events += 1;
+
+            // Coalesce multiple events into a single QUIC packet.
+            // The `Interceptor` won't emit them until it receives a sync event anyway.
+            if let Event::Sync(_) = event {
+                write.flush().await?;
+
+                tracing::trace!(
+                    "Wrote {} event{}",
+                    events,
+                    if events == 1 { "" } else { "s" }
+                );
+
+                events = 0;
+            }
+        }
+
+        write.shutdown().await?;
+
+        Ok(())
+    }
+    .instrument(span)
+    .await
 }

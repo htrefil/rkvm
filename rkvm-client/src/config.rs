@@ -1,10 +1,7 @@
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Formatter};
-use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::str::FromStr;
-use tokio_rustls::rustls::ServerName;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -15,7 +12,7 @@ pub struct Config {
 }
 
 pub struct Server {
-    pub hostname: ServerName,
+    pub hostname: String,
     pub port: u16,
 }
 
@@ -41,19 +38,11 @@ impl<'de> Visitor<'de> for ServerVisitor {
     where
         E: de::Error,
     {
-        // Parsing IPv6 socket addresses can get quite hairy, so let the SocketAddr parser do it for us.
-        if let Ok(socket_addr) = SocketAddr::from_str(data) {
-            return Ok(Server {
-                hostname: ServerName::IpAddress(socket_addr.ip()),
-                port: socket_addr.port(),
-            });
-        }
-
         let (hostname, port) = data
-            .split_once(':')
+            .rsplit_once(':')
             .ok_or_else(|| E::custom("No port provided"))?;
 
-        let hostname = hostname.try_into().map_err(E::custom)?;
+        let hostname = hostname.to_owned();
         let port = port.parse().map_err(E::custom)?;
 
         Ok(Server { hostname, port })
@@ -62,8 +51,6 @@ impl<'de> Visitor<'de> for ServerVisitor {
 
 #[cfg(test)]
 mod tests {
-    use std::net::Ipv6Addr;
-
     use super::*;
 
     #[derive(Deserialize)]
@@ -91,7 +78,7 @@ mod tests {
             .unwrap()
             .server;
         let expected = Server {
-            hostname: "127.0.0.1".try_into().unwrap(),
+            hostname: "127.0.0.1".to_owned(),
             port: 8523,
         };
 
@@ -105,19 +92,12 @@ mod tests {
             .unwrap()
             .server;
         let expected = Server {
-            hostname: "::1".try_into().unwrap(),
+            hostname: "[::1]".to_owned(),
             port: 8523,
         };
 
         assert_eq!(parsed.hostname, expected.hostname);
         assert_eq!(parsed.port, expected.port);
-
-        let parsed_ip = match parsed.hostname {
-            ServerName::IpAddress(parsed_ip) => parsed_ip,
-            _ => unreachable!(),
-        };
-
-        assert_eq!(parsed_ip, Ipv6Addr::from_str("::1").unwrap());
     }
 
     #[test]
