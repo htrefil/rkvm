@@ -12,3 +12,14 @@ key = "/etc/rkvm/key.pem"
 #
 # Change this to your own value before deploying rkvm.
 password = "123456789"
+
+# Optional switch to the server (same keys list as switch-keys)
+# goto-keys = [ "left-alt", "f1"]
+
+# Client will keep the order (non listed client will be after)
+# so switch-keys will cycle server -> 10.10.0.1 -> 10.10.0.2 -> -> other -> server
+# [[clients]]
+# addr = "10.10.0.1"                 # identify the client
+# goto-keys = [ "left-alt", "f2"]    # optional: go to this client directly if it's connected
+# [[clients]]
+# addr = "10.10.0.2"

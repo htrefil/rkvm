@@ -12,7 +12,7 @@ use slab::Slab;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
 use std::io::{self, ErrorKind};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use std::time::Instant;
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufStream};
@@ -22,6 +22,10 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time;
 use tokio_rustls::TlsAcceptor;
 use tracing::Instrument;
+
+use crate::config::ClientConfig;
+
+const ADDR_UNKNOWN: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED),0);
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -39,17 +43,38 @@ pub async fn run(
     password: &str,
     switch_keys: &HashSet<Key>,
     propagate_switch_keys: bool,
+    server_goto_keys: &Option<Vec<Key>>,
+    clients_config: &Vec<ClientConfig>,
 ) -> Result<(), Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     tracing::info!("Listening on {}", listen);
 
     let mut monitor = Monitor::new();
     let mut devices = Slab::<Device>::new();
-    let mut clients = Slab::<(Sender<_>, SocketAddr)>::new();
+    let mut clients = Slab::<Option<(Sender<_>, SocketAddr)>>::new();
     let mut current = 0;
     let mut previous = 0;
     let mut changed = false;
     let mut pressed_keys = HashSet::new();
+    let mut all_switch_keys = switch_keys.clone();
+    let mut static_client = Vec::new();
+    let mut goto_keys: HashMap<Vec<Key>,usize> = HashMap::new();
+
+
+    if let Some(keys) = server_goto_keys {
+         goto_keys.insert(keys.clone(), 0);
+         all_switch_keys.extend(keys);
+    }
+
+    for c in clients_config {
+        clients.insert(None);
+        static_client.push(c.addr);
+        if let Some(k) = &c.goto_keys {
+            let keys:Vec<Key> = k.clone().into_iter().map(Into::into).collect();
+            goto_keys.insert(keys.clone(), static_client.len());
+            all_switch_keys.extend(keys);
+        }
+    }
 
     let (events_sender, mut events_receiver) = mpsc::channel(1);
 
@@ -63,8 +88,24 @@ pub async fn run(
                 let password = password.to_owned();
 
                 // Remove dead clients.
-                clients.retain(|_, (client, _)| !client.is_closed());
-                if !clients.contains(current) {
+                for id in 0..static_client.len() {
+                    if let Some((client, _)) = &clients[id] {
+                        if client.is_closed() {
+                            clients[id] = None
+                        }
+                    }
+                }
+                clients.retain(|idx, e|
+                    if idx < static_client.len() {
+                        true
+                    } else {
+                        match e {
+                            Some((client, _)) => !client.is_closed(),
+                            None => true,
+                        }
+                    }
+                );
+                if current > 0 && (!clients.contains(current) || clients[current].is_none())  {
                     current = 0;
                 }
 
@@ -85,9 +126,22 @@ pub async fn run(
                     .collect();
 
                 let (sender, receiver) = mpsc::channel(1);
-                clients.insert((sender, addr));
 
-                let span = tracing::info_span!("connection", addr = %addr);
+                let index = static_client.iter().position(|ip| *ip == addr.ip());
+                let idx = match index {
+                    Some(idx) => {
+                        if clients[idx].is_some() {
+                            tracing::warn!("client {} already connected", addr);
+                            clients.insert(Some((sender, addr)))
+                        } else {
+                            clients[idx] = Some((sender, addr));
+                            idx
+                        }
+                    },
+                    None => clients.insert(Some((sender, addr))),
+                };
+                
+                let span = tracing::info_span!("connection", addr = %addr, idx = %idx);
                 tokio::spawn(
                     async move {
                         tracing::info!("Connected");
@@ -113,21 +167,26 @@ pub async fn run(
                 let keys = interceptor.key().collect::<HashSet<_>>();
                 let repeat = interceptor.repeat();
 
-                for (_, (sender, _)) in &clients {
-                    let update = Update::CreateDevice {
-                        id,
-                        name: name.clone(),
-                        version: version.clone(),
-                        vendor: vendor.clone(),
-                        product: product.clone(),
-                        rel: rel.clone(),
-                        abs: abs.clone(),
-                        keys: keys.clone(),
-                        delay: repeat.delay,
-                        period: repeat.period,
-                    };
+                for (_, e) in &clients {
+                    match e {
+                        Some((sender, _)) => {
+                            let update = Update::CreateDevice {
+                                id,
+                                name: name.clone(),
+                                version: version.clone(),
+                                vendor: vendor.clone(),
+                                product: product.clone(),
+                                rel: rel.clone(),
+                                abs: abs.clone(),
+                                keys: keys.clone(),
+                                delay: repeat.delay,
+                                period: repeat.period,
+                            };
 
-                    let _ = sender.send(update).await;
+                            let _ = sender.send(update).await;
+                        },
+                        None => {}
+                    }
                 }
 
                 let (interceptor_sender, mut interceptor_receiver) = mpsc::channel(32);
@@ -189,7 +248,7 @@ pub async fn run(
                     let mut press = false;
 
                     if let Event::Key(KeyEvent { key, down }) = event {
-                        if switch_keys.contains(&key) {
+                        if all_switch_keys.contains(&key) {
                             press = true;
 
                             match down {
@@ -203,28 +262,41 @@ pub async fn run(
                     let mut idx = current;
 
                     if press {
-                        if pressed_keys.len() == switch_keys.len() {
-                            let exists = |idx| idx == 0 || clients.contains(idx - 1);
-                            loop {
-                                current = (current + 1) % (clients.len() + 1);
-                                if exists(current) {
+                        let exists = |idx| idx == 0 || clients.get(idx - 1).is_some_and(Option::is_some);
+
+                        // we change in previous event keyup should be send to previous
+                        if changed {
+                            idx = previous;
+
+                            if pressed_keys.is_empty() {
+                                changed = false
+                            }
+                        } else {
+                            for (keys,&i) in &goto_keys {
+                                if exists(i) && keys.iter().all(|k| pressed_keys.contains(k)) {
+                                    current = i;
+                                    changed = true;
                                     break;
                                 }
                             }
 
-                            previous = idx;
-                            changed = true;
+                            if !changed && switch_keys.is_subset(&pressed_keys) {
+                                loop {
+                                    current = (current + 1) % (clients.len() + 1);
+                                    if exists(current) {
+                                        break;
+                                    }
+                                }
 
-                            if current != 0 {
-                                tracing::info!(idx = %current, addr = %clients[current - 1].1, "Switched client");
-                            } else {
-                                tracing::info!(idx = %current, "Switched client");
+                                changed = true;
                             }
-                        } else if changed {
-                            idx = previous;
-
-                            if pressed_keys.is_empty() {
-                                changed = false;
+                            if changed {
+                                previous = idx;
+                                if current != 0 {
+                                    tracing::info!(idx = %current, addr = %clients[current - 1].as_ref().map_or_else(|| &ADDR_UNKNOWN, |(_,a)| a), "Switched client");
+                                } else {
+                                    tracing::info!(idx = %current, "Switched client");
+                                }
                             }
                         }
                     }
@@ -254,18 +326,27 @@ pub async fn run(
                     }
 
                     for event in events {
-                        if clients[idx - 1].0.send(Update::Event { id, event }).await.is_err() {
-                            clients.remove(idx - 1);
+                        if let Some((s,_)) = &clients[idx -1] {
+                            if s.send(Update::Event { id, event }).await.is_err() {
+                                if idx - 1 < static_client.len() {
+                                    clients[idx -1] = None
+                                } else {
+                                    clients.remove(idx - 1);
+                                }
 
-                            if current == idx {
-                                current = 0;
+                                if current == idx {
+                                    current = 0;
+                                }
                             }
                         }
                     }
                 }
                 Err(err) if err.kind() == ErrorKind::BrokenPipe => {
-                    for (_, (sender, _)) in &clients {
-                        let _ = sender.send(Update::DestroyDevice { id }).await;
+                    for (_, e) in &clients {
+                        let _ = match e {
+                            Some((sender,_)) => sender.send(Update::DestroyDevice { id }).await,
+                            None => Ok(()),
+                        };
                     }
                     devices.remove(id);
 
