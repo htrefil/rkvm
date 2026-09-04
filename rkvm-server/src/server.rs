@@ -2,6 +2,7 @@ use rkvm_input::abs::{AbsAxis, AbsInfo};
 use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent};
 use rkvm_input::monitor::Monitor;
+use rkvm_input::property::Property;
 use rkvm_input::rel::RelAxis;
 use rkvm_input::sync::SyncEvent;
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
@@ -73,12 +74,14 @@ pub async fn run(
                     .map(|(id, device)| Update::CreateDevice {
                         id,
                         name: device.name.clone(),
+                        bustype: device.bustype,
                         version: device.version,
                         vendor: device.vendor,
                         product: device.product,
                         rel: device.rel.clone(),
                         abs: device.abs.clone(),
                         keys: device.keys.clone(),
+                        properties: device.properties.clone(),
                         delay: device.delay,
                         period: device.period,
                     })
@@ -106,23 +109,27 @@ pub async fn run(
                 let name = interceptor.name().to_owned();
                 let id = devices.vacant_key();
                 let version = interceptor.version();
+                let bustype = interceptor.bustype();
                 let vendor = interceptor.vendor();
                 let product = interceptor.product();
                 let rel = interceptor.rel().collect::<HashSet<_>>();
                 let abs = interceptor.abs().collect::<HashMap<_,_>>();
                 let keys = interceptor.key().collect::<HashSet<_>>();
+                let properties = interceptor.property().collect::<HashSet<_>>();
                 let repeat = interceptor.repeat();
 
                 for (_, (sender, _)) in &clients {
                     let update = Update::CreateDevice {
                         id,
                         name: name.clone(),
+                        bustype: bustype.clone(),
                         version: version.clone(),
                         vendor: vendor.clone(),
                         product: product.clone(),
                         rel: rel.clone(),
                         abs: abs.clone(),
                         keys: keys.clone(),
+                        properties: properties.clone(),
                         delay: repeat.delay,
                         period: repeat.period,
                     };
@@ -133,12 +140,14 @@ pub async fn run(
                 let (interceptor_sender, mut interceptor_receiver) = mpsc::channel(32);
                 devices.insert(Device {
                     name,
+                    bustype,
                     version,
                     vendor,
                     product,
                     rel,
                     abs,
                     keys,
+                    properties,
                     delay: repeat.delay,
                     period: repeat.period,
                     sender: interceptor_sender,
@@ -279,12 +288,14 @@ pub async fn run(
 
 struct Device {
     name: CString,
+    bustype: u16,
     vendor: u16,
     product: u16,
     version: u16,
     rel: HashSet<RelAxis>,
     abs: HashMap<AbsAxis, AbsInfo>,
     keys: HashSet<Key>,
+    properties: HashSet<Property>,
     delay: Option<i32>,
     period: Option<i32>,
     sender: Sender<Event>,

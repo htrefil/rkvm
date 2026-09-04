@@ -6,6 +6,7 @@ use crate::evdev::Evdev;
 use crate::event::Event;
 use crate::glue::{self, input_absinfo};
 use crate::key::{Key, KeyEvent};
+use crate::property::Property;
 use crate::rel::{RelAxis, RelEvent};
 use crate::uinput::Uinput;
 
@@ -120,6 +121,14 @@ impl WriterBuilder {
         self
     }
 
+    pub fn bustype(self, value: u16) -> Self {
+        unsafe {
+            glue::libevdev_set_id_bustype(self.evdev.as_ptr(), value as _);
+        }
+
+        self
+    }
+
     pub fn vendor(self, value: u16) -> Self {
         unsafe {
             glue::libevdev_set_id_vendor(self.evdev.as_ptr(), value as _);
@@ -159,6 +168,23 @@ impl WriterBuilder {
                     ptr::null(),
                 )
             };
+
+            if ret < 0 {
+                return Err(Error::from_raw_os_error(-ret));
+            }
+        }
+
+        Ok(self)
+    }
+
+    pub fn property<T: IntoIterator<Item = Property>>(self, items: T) -> Result<Self, Error> {
+        for property in items {
+            let property = match property.to_raw() {
+                Some(property) => property,
+                None => continue,
+            };
+
+            let ret = unsafe { glue::libevdev_enable_property(self.evdev.as_ptr(), property as _) };
 
             if ret < 0 {
                 return Err(Error::from_raw_os_error(-ret));

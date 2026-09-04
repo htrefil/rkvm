@@ -8,7 +8,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 pub struct Version(u16);
 
 impl Version {
-    pub const CURRENT: Self = Self(5);
+    pub const CURRENT: Self = Self(6);
 }
 
 impl Display for Version {

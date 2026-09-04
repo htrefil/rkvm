@@ -3,6 +3,7 @@ use crate::convert::Convert;
 use crate::glue;
 use crate::interceptor::Interceptor;
 use crate::key::Key;
+use crate::property::Property;
 use crate::rel::RelAxis;
 
 pub struct RelCaps<'a> {
@@ -149,6 +150,47 @@ impl Iterator for KeyCaps<'_> {
 
             if let Some(stroke) = Key::from_raw(self.current - 1) {
                 return Some(stroke);
+            }
+        }
+
+        None
+    }
+}
+
+pub struct PropertyCaps<'a> {
+    current: u16,
+    interceptor: &'a Interceptor,
+}
+
+impl<'a> PropertyCaps<'a> {
+    pub(super) fn new(interceptor: &'a Interceptor) -> Self {
+        Self {
+            current: 0,
+            interceptor,
+        }
+    }
+}
+
+impl Iterator for PropertyCaps<'_> {
+    type Item = Property;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.current < glue::INPUT_PROP_CNT as _ {
+            let has = unsafe {
+                glue::libevdev_has_property(
+                    self.interceptor.evdev.as_ptr(),
+                    self.current as _,
+                ) == 1
+            };
+
+            self.current += 1;
+
+            if !has {
+                continue;
+            }
+
+            if let Some(property) = Property::from_raw(self.current - 1) {
+                return Some(property);
             }
         }
 

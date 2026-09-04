@@ -1,6 +1,6 @@
 mod caps;
 
-pub use caps::{AbsCaps, KeyCaps, RelCaps, Repeat};
+pub use caps::{AbsCaps, KeyCaps, PropertyCaps, RelCaps, Repeat};
 
 use crate::abs::{AbsAxis, AbsEvent, ToolType};
 use crate::convert::Convert;
@@ -125,6 +125,10 @@ impl Interceptor {
         unsafe { glue::libevdev_get_id_version(self.evdev.as_ptr()) as _ }
     }
 
+    pub fn bustype(&self) -> u16 {
+        unsafe { glue::libevdev_get_id_bustype(self.evdev.as_ptr()) as _ }
+    }
+
     pub fn rel(&self) -> RelCaps {
         RelCaps::new(self)
     }
@@ -135,6 +139,10 @@ impl Interceptor {
 
     pub fn key(&self) -> KeyCaps {
         KeyCaps::new(self)
+    }
+
+    pub fn property(&self) -> PropertyCaps {
+        PropertyCaps::new(self)
     }
 
     pub fn repeat(&self) -> Repeat {
@@ -226,10 +234,6 @@ impl Interceptor {
                     return Err(Error::from_raw_os_error(-ret).into());
                 }
             }
-        }
-
-        unsafe {
-            glue::libevdev_set_id_bustype(evdev.as_ptr(), glue::BUS_VIRTUAL as _);
         }
 
         let ret =
