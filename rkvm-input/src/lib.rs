@@ -8,7 +8,9 @@ pub mod sync;
 pub mod writer;
 
 mod convert;
-mod evdev;
-mod glue;
-mod registry;
-mod uinput;
+
+#[cfg(target_os = "windows")]
+pub mod windows;
+#[cfg(target_os = "linux")]
+pub mod linux;
+

@@ -1,5 +1,5 @@
-use crate::evdev::Evdev;
-use crate::glue::{self, libevdev_uinput};
+use crate::linux::evdev::Evdev;
+use crate::linux::glue::{self, libevdev_uinput};
 
 use std::fs::File;
 use std::io::Error;

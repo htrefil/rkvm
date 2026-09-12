@@ -1,13 +1,14 @@
 use rkvm_input::abs::{AbsAxis, AbsInfo};
 use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent};
-use rkvm_input::monitor::Monitor;
+use rkvm_input::monitor::{Monitor,MonitorPlatform};
+use rkvm_input::interceptor::InterceptorPlatform;
 use rkvm_input::rel::RelAxis;
 use rkvm_input::sync::SyncEvent;
 use rkvm_net::auth::{AuthChallenge, AuthResponse, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
-use rkvm_net::{Pong, Update};
+use rkvm_net::Update;
 use slab::Slab;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
@@ -108,9 +109,9 @@ pub async fn run(
                 let version = interceptor.version();
                 let vendor = interceptor.vendor();
                 let product = interceptor.product();
-                let rel = interceptor.rel().collect::<HashSet<_>>();
-                let abs = interceptor.abs().collect::<HashMap<_,_>>();
-                let keys = interceptor.key().collect::<HashSet<_>>();
+                let rel = interceptor.rel();
+                let abs = interceptor.abs();
+                let keys = interceptor.key();
                 let repeat = interceptor.repeat();
 
                 for (_, (sender, _)) in &clients {
@@ -340,8 +341,7 @@ async fn client(
     })
     .await?;
 
-    let response =
-        rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthResponse::decode(&mut stream)).await?;
+    let response = rkvm_net::timeout(rkvm_net::READ_TIMEOUT, AuthResponse::decode(&mut stream)).await?;
     let status = match response.verify(&challenge, password) {
         true => AuthStatus::Passed,
         false => AuthStatus::Failed,
@@ -393,20 +393,8 @@ async fn client(
             Ok(())
         })
         .await?;
-        let duration = start.elapsed();
 
-        if let Update::Ping = update {
-            // Keeping these as debug because it's not as frequent as other updates.
-            tracing::debug!(duration = ?duration, "Sent ping");
-
-            let start = Instant::now();
-            rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Pong::decode(&mut stream)).await?;
-            let duration = start.elapsed();
-
-            tracing::debug!(duration = ?duration, "Received pong");
-        }
-
-        tracing::trace!("Wrote an update");
+        tracing::trace!(duration = ?start.elapsed(), "Wrote an update");
     }
 
     Ok(())

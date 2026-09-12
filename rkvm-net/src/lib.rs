@@ -50,10 +50,9 @@ pub enum Update {
         event: Event,
     },
     Ping,
+    Pong,
+    Stop,
 }
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct Pong;
 
 pub async fn timeout<T: Future<Output = Result<U, Error>>, U>(
     duration: Duration,
@@ -64,6 +63,7 @@ pub async fn timeout<T: Future<Output = Result<U, Error>>, U>(
         .map_err(|_| Error::new(ErrorKind::TimedOut, "Message timeout"))?
 }
 
+
 #[cfg(test)]
 mod test {
     use super::message::Message;
@@ -72,7 +72,7 @@ mod test {
     #[tokio::test]
     async fn pong_is_not_empty() {
         let mut data = Vec::new();
-        Pong.encode(&mut data).await.unwrap();
+        Update::Pong.encode(&mut data).await.unwrap();
 
         assert!(!data.is_empty());
     }

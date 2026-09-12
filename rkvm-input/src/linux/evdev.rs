@@ -1,4 +1,4 @@
-use crate::glue::{self, libevdev};
+use crate::linux::glue::{self, libevdev};
 
 use std::fs::File;
 use std::io::{Error, ErrorKind};

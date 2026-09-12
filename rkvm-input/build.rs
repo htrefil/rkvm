@@ -46,6 +46,6 @@ fn main() {
         .windows(RKVM_HAVE_ABS_PROFILE.len())
         .any(|window| window == RKVM_HAVE_ABS_PROFILE)
     {
-        println!("cargo:rustc-cfg=have_abs_profile");
+        println!("cargo:rustc-cfg=feature=\"abs_profile\"");
     }
 }

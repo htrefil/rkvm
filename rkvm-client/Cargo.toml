@@ -5,9 +5,22 @@ version = "0.6.1"
 authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+windows-service = [
+	"dep:windows-service",
+	"windows/Win32_System_Diagnostics_ToolHelp",
+    "windows/Win32_System_Threading",
+	"windows/Win32_Security_Authorization",
+	"windows/Win32_System_RemoteDesktop",
+]
+
+[[bin]]
+name = "rkvm-service"
+path = "src/windows-service.rs"
+required-features = ["windows-service"]
 
 [dependencies]
+async-trait = "0.1.89"
 tokio = { version = "1.0.1", features = ["macros", "time", "fs", "net", "signal", "rt-multi-thread", "sync"] }
 rkvm-input = { path = "../rkvm-input" }
 rkvm-net = { path = "../rkvm-net" }
@@ -19,7 +32,11 @@ thiserror = "1.0.40"
 tokio-rustls = "0.24.0"
 rustls-pemfile = "1.0.2"
 tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.17", features = ["env-filter", "local-time"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = "0.62"
+windows-service = { version = "0.8", optional = true }
 
 [package.metadata.rpm]
 package = "rkvm-client"

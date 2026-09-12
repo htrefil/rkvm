@@ -1,17 +1,17 @@
 use crate::abs::{AbsAxis, AbsInfo};
 use crate::convert::Convert;
-use crate::glue;
-use crate::interceptor::Interceptor;
+use crate::linux::glue;
+use crate::linux::interceptor::InterceptorLinux;
 use crate::key::Key;
 use crate::rel::RelAxis;
 
 pub struct RelCaps<'a> {
     current: u16,
-    interceptor: &'a Interceptor,
+    interceptor: &'a InterceptorLinux,
 }
 
 impl<'a> RelCaps<'a> {
-    pub(super) fn new(interceptor: &'a Interceptor) -> Self {
+    pub(super) fn new(interceptor: &'a InterceptorLinux) -> Self {
         let has =
             unsafe { glue::libevdev_has_event_type(interceptor.evdev.as_ptr(), glue::EV_REL) == 1 };
 
@@ -52,11 +52,11 @@ impl Iterator for RelCaps<'_> {
 
 pub struct AbsCaps<'a> {
     current: u16,
-    interceptor: &'a Interceptor,
+    interceptor: &'a InterceptorLinux,
 }
 
 impl<'a> AbsCaps<'a> {
-    pub(super) fn new(interceptor: &'a Interceptor) -> Self {
+    pub(super) fn new(interceptor: &'a InterceptorLinux) -> Self {
         let has =
             unsafe { glue::libevdev_has_event_type(interceptor.evdev.as_ptr(), glue::EV_ABS) == 1 };
 
@@ -113,11 +113,11 @@ impl Iterator for AbsCaps<'_> {
 
 pub struct KeyCaps<'a> {
     current: u16,
-    interceptor: &'a Interceptor,
+    interceptor: &'a InterceptorLinux,
 }
 
 impl<'a> KeyCaps<'a> {
-    pub(super) fn new(interceptor: &'a Interceptor) -> Self {
+    pub(super) fn new(interceptor: &'a InterceptorLinux) -> Self {
         let has =
             unsafe { glue::libevdev_has_event_type(interceptor.evdev.as_ptr(), glue::EV_KEY) == 1 };
 
@@ -153,53 +153,5 @@ impl Iterator for KeyCaps<'_> {
         }
 
         None
-    }
-}
-
-pub struct Repeat {
-    pub delay: Option<i32>,
-    pub period: Option<i32>,
-}
-
-impl Repeat {
-    pub(super) fn new(interceptor: &Interceptor) -> Self {
-        let has = unsafe {
-            glue::libevdev_has_event_code(interceptor.evdev.as_ptr(), glue::EV_REP, glue::REP_DELAY)
-                == 1
-        };
-
-        let delay = if has {
-            Some(unsafe {
-                glue::libevdev_get_event_value(
-                    interceptor.evdev.as_ptr(),
-                    glue::EV_REP,
-                    glue::REP_DELAY,
-                )
-            })
-        } else {
-            None
-        };
-
-        let has = unsafe {
-            glue::libevdev_has_event_code(
-                interceptor.evdev.as_ptr(),
-                glue::EV_REP,
-                glue::REP_PERIOD,
-            ) == 1
-        };
-
-        let period = if has {
-            Some(unsafe {
-                glue::libevdev_get_event_value(
-                    interceptor.evdev.as_ptr(),
-                    glue::EV_REP,
-                    glue::REP_PERIOD,
-                )
-            })
-        } else {
-            None
-        };
-
-        Self { delay, period }
     }
 }
