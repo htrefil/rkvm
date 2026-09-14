@@ -23,3 +23,6 @@ pkg-config = "0.3.19"
 
 [lib]
 doctest = false
+
+[features]
+have_abs_profile = []

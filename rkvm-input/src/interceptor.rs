@@ -125,15 +125,15 @@ impl Interceptor {
         unsafe { glue::libevdev_get_id_version(self.evdev.as_ptr()) as _ }
     }
 
-    pub fn rel(&self) -> RelCaps {
+    pub fn rel(&self) -> RelCaps<'_> {
         RelCaps::new(self)
     }
 
-    pub fn abs(&self) -> AbsCaps {
+    pub fn abs(&self) -> AbsCaps<'_> {
         AbsCaps::new(self)
     }
 
-    pub fn key(&self) -> KeyCaps {
+    pub fn key(&self) -> KeyCaps<'_> {
         KeyCaps::new(self)
     }
 
