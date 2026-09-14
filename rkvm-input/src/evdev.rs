@@ -1,5 +1,6 @@
 use crate::glue::{self, libevdev};
 
+use std::ffi::CStr;
 use std::fs::File;
 use std::io::{Error, ErrorKind};
 use std::mem::MaybeUninit;
@@ -49,6 +50,25 @@ impl Evdev {
             evdev,
             file: Some(file),
         })
+    }
+
+    pub fn name(&self) -> &CStr {
+        let name = unsafe { glue::libevdev_get_name(self.as_ptr()) };
+        let name = unsafe { CStr::from_ptr(name) };
+
+        name
+    }
+
+    pub fn vendor(&self) -> u16 {
+        unsafe { glue::libevdev_get_id_vendor(self.as_ptr()) as _ }
+    }
+
+    pub fn product(&self) -> u16 {
+        unsafe { glue::libevdev_get_id_product(self.as_ptr()) as _ }
+    }
+
+    pub fn version(&self) -> u16 {
+        unsafe { glue::libevdev_get_id_version(self.as_ptr()) as _ }
     }
 
     pub fn file(&self) -> Option<&AsyncFd<File>> {

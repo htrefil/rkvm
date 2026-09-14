@@ -1,3 +1,4 @@
+use crate::device::DeviceSpec;
 use crate::interceptor::{Interceptor, OpenError};
 use crate::registry::Registry;
 
@@ -16,9 +17,9 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new() -> Self {
+    pub fn new(device_allowlist: Vec<DeviceSpec>) -> Self {
         let (sender, receiver) = mpsc::channel(1);
-        tokio::spawn(monitor(sender));
+        tokio::spawn(monitor(sender, device_allowlist));
 
         Self { receiver }
     }
@@ -31,7 +32,7 @@ impl Monitor {
     }
 }
 
-async fn monitor(sender: Sender<Result<Interceptor, Error>>) {
+async fn monitor(sender: Sender<Result<Interceptor, Error>>, device_allowlist: Vec<DeviceSpec>) {
     let run = async {
         let registry = Registry::new();
 
@@ -70,10 +71,11 @@ async fn monitor(sender: Sender<Result<Interceptor, Error>>) {
                 continue;
             }
 
-            let interceptor = match Interceptor::open(&path, &registry).await {
+            let interceptor = match Interceptor::open(&path, &registry, &device_allowlist).await {
                 Ok(interceptor) => interceptor,
                 Err(OpenError::Io(err)) => return Err(err),
                 Err(OpenError::NotAppliable) => continue,
+                Err(OpenError::NotMatchingAllowlist) => continue,
             };
 
             if sender.send(Ok(interceptor)).await.is_err() {

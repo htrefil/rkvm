@@ -49,6 +49,7 @@ pub struct Handle {
 
 impl Drop for Handle {
     fn drop(&mut self) {
+        tracing::trace!("Dropping {:?}", self.entry);
         assert!(self.entries.lock().unwrap().remove(&self.entry));
     }
 }

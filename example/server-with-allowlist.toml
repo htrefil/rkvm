@@ -1,0 +1,27 @@
+listen = "0.0.0.0:5258"
+# See `switch-keys.md` in the repository root for the list of all possible keys.
+switch-keys = ["left-alt", "left-ctrl"]
+# Whether switch key presses should be propagated on the server and its clients.
+# Optional, defaults to true.
+# propagate-switch-keys = true
+certificate = "/etc/rkvm/certificate.pem"
+key = "/etc/rkvm/key.pem"
+
+# This is to prevent malicious clients from connecting to the server.
+# Make sure this matches your client's config.
+#
+# Change this to your own value before deploying rkvm.
+password = "123456789"
+
+# A device must match one of the listed devices to be forwarded
+#
+# Filling out all fields means all fields must match exactly for it to be
+# considered a match
+[[device-allowlist]]
+name = "device name"
+vendor-id = 123
+product-id = 456
+
+# Filling out only one field means it must match, and the others are not checked
+[[device-allowlist]]
+vendor-id = 7
