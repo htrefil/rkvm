@@ -13,6 +13,7 @@ fn main() {
         _ => panic!("Unsupported target OS"),
     }
 
+    println!("cargo:rustc-check-cfg=cfg(have_abs_profile)");
     println!("cargo:rerun-if-changed=glue/glue.h");
     println!("cargo:rerun-if-changed=glue/check.h");
 

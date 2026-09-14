@@ -129,19 +129,19 @@ impl Interceptor {
         unsafe { glue::libevdev_get_id_bustype(self.evdev.as_ptr()) as _ }
     }
 
-    pub fn rel(&self) -> RelCaps {
+    pub fn rel(&self) -> RelCaps<'_> {
         RelCaps::new(self)
     }
 
-    pub fn abs(&self) -> AbsCaps {
+    pub fn abs(&self) -> AbsCaps<'_> {
         AbsCaps::new(self)
     }
 
-    pub fn key(&self) -> KeyCaps {
+    pub fn key(&self) -> KeyCaps<'_> {
         KeyCaps::new(self)
     }
 
-    pub fn property(&self) -> PropertyCaps {
+    pub fn property(&self) -> PropertyCaps<'_> {
         PropertyCaps::new(self)
     }
 
