@@ -8,6 +8,7 @@ pub mod version;
 use rkvm_input::abs::{AbsAxis, AbsInfo};
 use rkvm_input::event::Event;
 use rkvm_input::key::Key;
+use rkvm_input::property::Property;
 use rkvm_input::rel::RelAxis;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -33,12 +34,14 @@ pub enum Update {
     CreateDevice {
         id: usize,
         name: CString,
+        bustype: u16,
         vendor: u16,
         product: u16,
         version: u16,
         rel: HashSet<RelAxis>,
         abs: HashMap<AbsAxis, AbsInfo>,
         keys: HashSet<Key>,
+        properties: HashSet<Property>,
         delay: Option<i32>,
         period: Option<i32>,
     },

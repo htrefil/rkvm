@@ -117,12 +117,14 @@ pub async fn run(
             Update::CreateDevice {
                 id,
                 name,
+                bustype,
                 vendor,
                 product,
                 version,
                 rel,
                 abs,
                 keys,
+                properties,
                 delay,
                 period,
             } => {
@@ -137,12 +139,14 @@ pub async fn run(
                 let writer = async {
                     Writer::builder()?
                         .name(&name)
+                        .bustype(bustype)
                         .vendor(vendor)
                         .product(product)
                         .version(version)
                         .rel(rel)?
                         .abs(abs)?
                         .key(keys)?
+                        .property(properties)?
                         .delay(delay)?
                         .period(period)?
                         .build()
