@@ -27,6 +27,7 @@ impl Convert for Property {
             glue::INPUT_PROP_TOPBUTTONPAD => Self::TopButtonPad,
             glue::INPUT_PROP_POINTING_STICK => Self::PointingStick,
             glue::INPUT_PROP_ACCELEROMETER => Self::Accelerometer,
+            #[cfg(have_input_prop_pressurepad)]
             glue::INPUT_PROP_PRESSUREPAD => Self::PressurePad,
             _ => return None,
         };
@@ -43,7 +44,10 @@ impl Convert for Property {
             Self::TopButtonPad => glue::INPUT_PROP_TOPBUTTONPAD,
             Self::PointingStick => glue::INPUT_PROP_POINTING_STICK,
             Self::Accelerometer => glue::INPUT_PROP_ACCELEROMETER,
+            #[cfg(have_input_prop_pressurepad)]
             Self::PressurePad => glue::INPUT_PROP_PRESSUREPAD,
+            #[cfg(not(have_input_prop_pressurepad))]
+            Self::PressurePad => return None,
         };
 
         Some(raw as _)

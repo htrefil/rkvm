@@ -4,7 +4,15 @@ use pkg_config::Config;
 use std::env;
 use std::path::PathBuf;
 
-const RKVM_HAVE_ABS_PROFILE: &[u8] = b"RKVM_HAVE_ABS_PROFILE";
+const CHECKS: &[(&str, &str)] = &[
+    // Added in v6.1-rc1.
+    ("RKVM_HAVE_ABS_PROFILE", "have_abs_profile"),
+    // Only present in newer kernels.
+    (
+        "RKVM_HAVE_INPUT_PROP_PRESSUREPAD",
+        "have_input_prop_pressurepad",
+    ),
+];
 
 fn main() {
     match env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() {
@@ -13,7 +21,10 @@ fn main() {
         _ => panic!("Unsupported target OS"),
     }
 
-    println!("cargo:rustc-check-cfg=cfg(have_abs_profile)");
+    for (_, cfg) in CHECKS {
+        println!("cargo:rustc-check-cfg=cfg({})", cfg);
+    }
+
     println!("cargo:rerun-if-changed=glue/glue.h");
     println!("cargo:rerun-if-changed=glue/check.h");
 
@@ -37,16 +48,20 @@ fn main() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings.write_to_file(out_path.join("glue.rs")).unwrap();
 
-    // Check for RKVM_ABS_PROFILE, which was added in v6.1-rc1.
+    // Check for definitions that are missing in older kernel headers.
     let expanded = Build::new()
         .file("glue/check.h")
         .includes(library.include_paths)
         .expand();
 
-    if expanded
-        .windows(RKVM_HAVE_ABS_PROFILE.len())
-        .any(|window| window == RKVM_HAVE_ABS_PROFILE)
-    {
-        println!("cargo:rustc-cfg=have_abs_profile");
+    for (marker, cfg) in CHECKS {
+        let marker = marker.as_bytes();
+
+        if expanded
+            .windows(marker.len())
+            .any(|window| window == marker)
+        {
+            println!("cargo:rustc-cfg={}", cfg);
+        }
     }
 }
