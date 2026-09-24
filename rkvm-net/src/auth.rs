@@ -1,6 +1,6 @@
-use hmac::{Hmac, Mac};
-use rand::rngs::OsRng;
-use rand::{Error, Rng};
+use hmac::{Hmac, KeyInit, Mac};
+use rand::rngs::{SysError, SysRng};
+use rand::TryRng;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tokio::task;
@@ -11,10 +11,10 @@ type ChallengeHmac = Hmac<Sha256>;
 pub struct AuthChallenge([u8; 32]);
 
 impl AuthChallenge {
-    pub async fn generate() -> Result<Self, Error> {
+    pub async fn generate() -> Result<Self, SysError> {
         task::spawn_blocking(|| {
             let mut data = [0; 32];
-            OsRng.try_fill(&mut data)?;
+            SysRng.try_fill_bytes(&mut data)?;
 
             Ok(Self(data))
         })

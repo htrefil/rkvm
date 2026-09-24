@@ -1,3 +1,4 @@
+use rand::rngs::SysError;
 use rkvm_input::abs::{AbsAxis, AbsInfo};
 use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent};
@@ -310,7 +311,7 @@ enum ClientError {
     #[error("Invalid password")]
     Auth,
     #[error(transparent)]
-    Rand(#[from] rand::Error),
+    Rand(#[from] SysError),
 }
 
 async fn client(

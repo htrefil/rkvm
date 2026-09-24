@@ -1,4 +1,4 @@
-use bindgen::{Builder, CargoCallbacks};
+use bindgen::Builder;
 use cc::Build;
 use pkg_config::Config;
 use std::env;
@@ -41,7 +41,8 @@ fn main() {
     let bindings = Builder::default()
         .header("glue/glue.h")
         .clang_args(args)
-        .parse_callbacks(Box::new(CargoCallbacks))
+        // Importing `CargoCallbacks` would also pull in the deprecated constant of the same name.
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .unwrap();
 

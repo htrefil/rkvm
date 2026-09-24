@@ -4,7 +4,7 @@ use std::fmt::{self, Formatter};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use tokio_rustls::rustls::ServerName;
+use tokio_rustls::rustls::pki_types::ServerName;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -15,7 +15,7 @@ pub struct Config {
 }
 
 pub struct Server {
-    pub hostname: ServerName,
+    pub hostname: ServerName<'static>,
     pub port: u16,
 }
 
@@ -44,7 +44,7 @@ impl<'de> Visitor<'de> for ServerVisitor {
         // Parsing IPv6 socket addresses can get quite hairy, so let the SocketAddr parser do it for us.
         if let Ok(socket_addr) = SocketAddr::from_str(data) {
             return Ok(Server {
-                hostname: ServerName::IpAddress(socket_addr.ip()),
+                hostname: ServerName::IpAddress(socket_addr.ip().into()),
                 port: socket_addr.port(),
             });
         }
@@ -53,7 +53,7 @@ impl<'de> Visitor<'de> for ServerVisitor {
             .split_once(':')
             .ok_or_else(|| E::custom("No port provided"))?;
 
-        let hostname = hostname.try_into().map_err(E::custom)?;
+        let hostname = hostname.to_owned().try_into().map_err(E::custom)?;
         let port = port.parse().map_err(E::custom)?;
 
         Ok(Server { hostname, port })
@@ -62,7 +62,7 @@ impl<'de> Visitor<'de> for ServerVisitor {
 
 #[cfg(test)]
 mod tests {
-    use std::net::Ipv6Addr;
+    use std::net::{IpAddr, Ipv6Addr};
 
     use super::*;
 
@@ -113,7 +113,7 @@ mod tests {
         assert_eq!(parsed.port, expected.port);
 
         let parsed_ip = match parsed.hostname {
-            ServerName::IpAddress(parsed_ip) => parsed_ip,
+            ServerName::IpAddress(parsed_ip) => IpAddr::from(parsed_ip),
             _ => unreachable!(),
         };
 

@@ -1,4 +1,3 @@
-use bincode::{DefaultOptions, Options};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::io::{Error, ErrorKind};
@@ -17,9 +16,14 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
         let mut data = vec![0; length.into()];
         stream.read_exact(&mut data).await?;
 
-        let data = options()
-            .deserialize(&data)
+        // postcard::from_bytes ignores trailing data, but a frame whose length prefix
+        // overshoots the message is malformed, so reject the leftovers explicitly.
+        let (data, rest) = postcard::take_from_bytes(&data)
             .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+
+        if !rest.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidData, "Trailing message data"));
+        }
 
         tracing::trace!("Read {} bytes", 2 + length);
 
@@ -27,9 +31,8 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
     }
 
     async fn encode<W: AsyncWrite + Send + Unpin>(&self, stream: &mut W) -> Result<(), Error> {
-        let data = options()
-            .serialize(self)
-            .map_err(|err| Error::new(ErrorKind::InvalidInput, err))?;
+        let data =
+            postcard::to_stdvec(self).map_err(|err| Error::new(ErrorKind::InvalidInput, err))?;
 
         let length = data
             .len()
@@ -43,8 +46,4 @@ impl<T: DeserializeOwned + Serialize + Sync> Message for T {
 
         Ok(())
     }
-}
-
-fn options() -> impl Options {
-    DefaultOptions::new().with_limit(u16::MAX.into())
 }

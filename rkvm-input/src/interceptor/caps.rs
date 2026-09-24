@@ -177,10 +177,7 @@ impl Iterator for PropertyCaps<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         while self.current < glue::INPUT_PROP_CNT as _ {
             let has = unsafe {
-                glue::libevdev_has_property(
-                    self.interceptor.evdev.as_ptr(),
-                    self.current as _,
-                ) == 1
+                glue::libevdev_has_property(self.interceptor.evdev.as_ptr(), self.current as _) == 1
             };
 
             self.current += 1;

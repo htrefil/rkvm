@@ -6,12 +6,13 @@ use rkvm_net::{Pong, Update};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::io;
+use std::net::IpAddr;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufStream};
 use tokio::net::TcpStream;
 use tokio::time;
-use tokio_rustls::rustls::ServerName;
+use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::TlsConnector;
 
 #[derive(Error, Debug)]
@@ -27,7 +28,7 @@ pub enum Error {
 }
 
 pub async fn run(
-    hostname: &ServerName,
+    hostname: &ServerName<'static>,
     port: u16,
     connector: TlsConnector,
     password: &str,
@@ -35,7 +36,7 @@ pub async fn run(
     // Intentionally don't impose any timeout for TCP connect.
     let stream = match hostname {
         ServerName::DnsName(name) => TcpStream::connect(&(name.as_ref(), port)).await,
-        ServerName::IpAddress(address) => TcpStream::connect(&(*address, port)).await,
+        ServerName::IpAddress(address) => TcpStream::connect(&(IpAddr::from(*address), port)).await,
         _ => unimplemented!("Unhandled rustls ServerName variant: {:?}", hostname),
     }
     .map_err(Error::Network)?;

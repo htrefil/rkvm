@@ -7,19 +7,19 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.117", features = ["derive"] }
-futures = "0.3.8"
-smallvec = { version = "1.10.0", features = ["serde"] }
-inotify = "0.10.0"
-tokio = { version = "1.0.1", features = ["fs", "io-util", "net", "sync", "rt", "time", "macros"] }
-libc = "0.2.77"
-thiserror = "1.0.40"
-tracing = "0.1.37"
+serde = { version = "1.0.229", features = ["derive"] }
+futures = "0.3.34"
+smallvec = { version = "1.16.1", features = ["serde"] }
+inotify = "0.11.5"
+tokio = { version = "1.53.1", features = ["fs", "io-util", "net", "sync", "rt", "time", "macros"] }
+libc = "0.2.189"
+thiserror = "2.0.20"
+tracing = "0.1.44"
 
 [build-dependencies]
-bindgen = "0.65.1"
-cc = "1.0.83"
-pkg-config = "0.3.19"
+bindgen = "0.73.2"
+cc = "1.4.6"
+pkg-config = "0.3.34"
 
 [lib]
 doctest = false
