@@ -1,5 +1,6 @@
 use rand::rngs::SysError;
 use rkvm_input::abs::{AbsAxis, AbsInfo};
+use rkvm_input::bus::Bus;
 use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent};
 use rkvm_input::monitor::Monitor;
@@ -75,7 +76,7 @@ pub async fn run(
                     .map(|(id, device)| Update::CreateDevice {
                         id,
                         name: device.name.clone(),
-                        bustype: device.bustype,
+                        bus_type: device.bus_type,
                         version: device.version,
                         vendor: device.vendor,
                         product: device.product,
@@ -110,7 +111,7 @@ pub async fn run(
                 let name = interceptor.name().to_owned();
                 let id = devices.vacant_key();
                 let version = interceptor.version();
-                let bustype = interceptor.bustype();
+                let bus_type = interceptor.bus_type();
                 let vendor = interceptor.vendor();
                 let product = interceptor.product();
                 let rel = interceptor.rel().collect::<HashSet<_>>();
@@ -123,7 +124,7 @@ pub async fn run(
                     let update = Update::CreateDevice {
                         id,
                         name: name.clone(),
-                        bustype: bustype.clone(),
+                        bus_type: bus_type.clone(),
                         version: version.clone(),
                         vendor: vendor.clone(),
                         product: product.clone(),
@@ -141,7 +142,7 @@ pub async fn run(
                 let (interceptor_sender, mut interceptor_receiver) = mpsc::channel(32);
                 devices.insert(Device {
                     name,
-                    bustype,
+                    bus_type,
                     version,
                     vendor,
                     product,
@@ -289,7 +290,7 @@ pub async fn run(
 
 struct Device {
     name: CString,
-    bustype: u16,
+    bus_type: Option<Bus>,
     vendor: u16,
     product: u16,
     version: u16,

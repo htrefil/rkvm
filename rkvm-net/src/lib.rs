@@ -6,6 +6,7 @@ pub mod message;
 pub mod version;
 
 use rkvm_input::abs::{AbsAxis, AbsInfo};
+use rkvm_input::bus::Bus;
 use rkvm_input::event::Event;
 use rkvm_input::key::Key;
 use rkvm_input::property::Property;
@@ -34,7 +35,7 @@ pub enum Update {
     CreateDevice {
         id: usize,
         name: CString,
-        bustype: u16,
+        bus_type: Option<Bus>,
         vendor: u16,
         product: u16,
         version: u16,

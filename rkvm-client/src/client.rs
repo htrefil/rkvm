@@ -1,3 +1,4 @@
+use rkvm_input::bus::Bus;
 use rkvm_input::writer::Writer;
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
@@ -118,7 +119,7 @@ pub async fn run(
             Update::CreateDevice {
                 id,
                 name,
-                bustype,
+                bus_type,
                 vendor,
                 product,
                 version,
@@ -138,9 +139,8 @@ pub async fn run(
                 }
 
                 let writer = async {
-                    Writer::builder()?
+                    Writer::builder(bus_type.unwrap_or(Bus::Virtual))?
                         .name(&name)
-                        .bustype(bustype)
                         .vendor(vendor)
                         .product(product)
                         .version(version)

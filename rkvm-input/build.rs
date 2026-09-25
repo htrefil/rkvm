@@ -12,6 +12,8 @@ const CHECKS: &[(&str, &str)] = &[
         "RKVM_HAVE_INPUT_PROP_PRESSUREPAD",
         "have_input_prop_pressurepad",
     ),
+    // Added in v6.17-rc1.
+    ("RKVM_HAVE_BUS_SDW", "have_bus_sdw"),
 ];
 
 fn main() {

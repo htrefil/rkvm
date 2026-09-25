@@ -1,6 +1,7 @@
 use libc::c_int;
 
 use crate::abs::{AbsAxis, AbsEvent, AbsInfo};
+use crate::bus::Bus;
 use crate::convert::Convert;
 use crate::evdev::Evdev;
 use crate::event::Event;
@@ -21,8 +22,8 @@ pub struct Writer {
 }
 
 impl Writer {
-    pub fn builder() -> Result<WriterBuilder, Error> {
-        WriterBuilder::new()
+    pub fn builder(bus_type: Bus) -> Result<WriterBuilder, Error> {
+        WriterBuilder::new(bus_type)
     }
 
     pub async fn write(&mut self, event: &Event) -> Result<(), Error> {
@@ -103,11 +104,20 @@ pub struct WriterBuilder {
 }
 
 impl WriterBuilder {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new(bus_type: Bus) -> Result<Self, Error> {
         let evdev = Evdev::new()?;
 
+        let raw = match bus_type.to_raw() {
+            Some(raw) => raw,
+            // This kernel's headers don't know this bus, so it has no number to set.
+            None => {
+                tracing::warn!("Unsupported bus type {:?}, using virtual", bus_type);
+                glue::BUS_VIRTUAL as _
+            }
+        };
+
         unsafe {
-            glue::libevdev_set_id_bustype(evdev.as_ptr(), glue::BUS_VIRTUAL as _);
+            glue::libevdev_set_id_bustype(evdev.as_ptr(), raw as _);
         }
 
         Ok(Self { evdev })
@@ -116,14 +126,6 @@ impl WriterBuilder {
     pub fn name(self, name: &CStr) -> Self {
         unsafe {
             glue::libevdev_set_name(self.evdev.as_ptr(), name.as_ptr());
-        }
-
-        self
-    }
-
-    pub fn bustype(self, value: u16) -> Self {
-        unsafe {
-            glue::libevdev_set_id_bustype(self.evdev.as_ptr(), value as _);
         }
 
         self
