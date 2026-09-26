@@ -230,9 +230,9 @@ impl Interceptor {
 
             if (min != 0 || max != 0) && max < min {
                 tracing::warn!(
-                    min = %min,
-                    max = max,
-                    axis = i,
+                    %min,
+                    %max,
+                    axis = %i,
                     "Detected nonsense min and max values for absolute axis, disabling it",
                 );
 

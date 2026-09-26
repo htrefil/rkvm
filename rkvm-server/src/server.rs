@@ -92,7 +92,7 @@ pub async fn run(
                 let (sender, receiver) = mpsc::channel(1);
                 clients.insert((sender, addr));
 
-                let span = tracing::info_span!("connection", addr = %addr);
+                let span = tracing::info_span!("connection", %addr);
                 tokio::spawn(
                     async move {
                         tracing::info!("Connected");
@@ -178,7 +178,7 @@ pub async fn run(
                                     }
                                 }
 
-                                tracing::trace!(id = %id, "Wrote an event to device");
+                                tracing::trace!(%id, "Wrote an event to device");
                             }
                         }
                     }
@@ -187,7 +187,7 @@ pub async fn run(
                 let device = &devices[id];
 
                 tracing::info!(
-                    id = %id,
+                    %id,
                     name = ?device.name,
                     vendor = %device.vendor,
                     product = %device.product,
@@ -280,7 +280,7 @@ pub async fn run(
                     }
                     devices.remove(id);
 
-                    tracing::info!(id = %id, "Destroyed device");
+                    tracing::info!(%id, "Destroyed device");
                 }
                 Err(err) => return Err(Error::Input(err)),
             }
@@ -410,13 +410,13 @@ async fn client(
 
         if let Update::Ping = update {
             // Keeping these as debug because it's not as frequent as other updates.
-            tracing::debug!(duration = ?duration, "Sent ping");
+            tracing::debug!(?duration, "Sent ping");
 
             let start = Instant::now();
             rkvm_net::timeout(rkvm_net::READ_TIMEOUT, Pong::decode(&mut stream)).await?;
             let duration = start.elapsed();
 
-            tracing::debug!(duration = ?duration, "Received pong");
+            tracing::debug!(?duration, "Received pong");
         }
 
         tracing::trace!("Wrote an update");

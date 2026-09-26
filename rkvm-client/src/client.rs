@@ -158,11 +158,11 @@ pub async fn run(
                 entry.or_insert(writer);
 
                 tracing::info!(
-                    id = %id,
-                    name = ?name,
-                    vendor = %vendor,
-                    product = %product,
-                    version = %version,
+                    %id,
+                    ?name,
+                    %vendor,
+                    %product,
+                    %version,
                     "Created new device"
                 );
             }
@@ -174,7 +174,7 @@ pub async fn run(
                     )));
                 }
 
-                tracing::info!(id = %id, "Destroyed device");
+                tracing::info!(%id, "Destroyed device");
             }
             Update::Event { id, event } => {
                 let writer = writers.get_mut(&id).ok_or_else(|| {
@@ -186,11 +186,11 @@ pub async fn run(
 
                 writer.write(&event).await.map_err(Error::Input)?;
 
-                tracing::trace!(id = %id, "Wrote an event to device");
+                tracing::trace!(%id, "Wrote an event to device");
             }
             Update::Ping => {
                 let duration = start.elapsed();
-                tracing::debug!(duration = ?duration, "Received ping");
+                tracing::debug!(?duration, "Received ping");
 
                 start = Instant::now();
                 interval.reset();
@@ -205,7 +205,7 @@ pub async fn run(
                 .map_err(Error::Network)?;
 
                 let duration = start.elapsed();
-                tracing::debug!(duration = ?duration, "Sent pong");
+                tracing::debug!(?duration, "Sent pong");
             }
         }
     }
