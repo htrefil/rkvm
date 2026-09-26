@@ -3,7 +3,7 @@ mod caps;
 pub use caps::{AbsCaps, KeyCaps, PropertyCaps, RelCaps, Repeat};
 
 use crate::abs::{AbsAxis, AbsEvent, ToolType};
-use crate::bus::Bus;
+use crate::bus::BusType;
 use crate::convert::Convert;
 use crate::evdev::Evdev;
 use crate::event::Event;
@@ -25,6 +25,7 @@ use thiserror::Error;
 pub struct Interceptor {
     evdev: Evdev,
     writer: Writer,
+    bus_type: BusType,
     // The state of `read` is stored here to make it cancel safe.
     events: VecDeque<Event>,
     writing: Option<(u16, u16, i32)>,
@@ -126,10 +127,8 @@ impl Interceptor {
         unsafe { glue::libevdev_get_id_version(self.evdev.as_ptr()) as _ }
     }
 
-    pub fn bus_type(&self) -> Option<Bus> {
-        let bus_type = unsafe { glue::libevdev_get_id_bustype(self.evdev.as_ptr()) };
-
-        Bus::from_raw(bus_type as _)
+    pub fn bus_type(&self) -> BusType {
+        self.bus_type
     }
 
     pub fn rel(&self) -> RelCaps<'_> {
@@ -194,6 +193,13 @@ impl Interceptor {
     #[tracing::instrument(skip(registry))]
     pub(crate) async fn open(path: &Path, registry: &Registry) -> Result<Self, OpenError> {
         let evdev = Evdev::open(path).await?;
+
+        // Reject the device before creating a clone of it, so that we don't have to destroy one.
+        let bus_type = unsafe { glue::libevdev_get_id_bustype(evdev.as_ptr()) } as u16;
+        let Some(bus_type) = BusType::from_raw(bus_type) else {
+            return Err(OpenError::BusType(bus_type));
+        };
+
         let metadata = evdev.file().unwrap().get_ref().metadata()?;
 
         let reader_handle = registry
@@ -270,6 +276,7 @@ impl Interceptor {
         Ok(Self {
             evdev,
             writer,
+            bus_type,
             events: VecDeque::new(),
             dropped: false,
             writing: None,
@@ -286,6 +293,8 @@ unsafe impl Send for Interceptor {}
 pub(crate) enum OpenError {
     #[error("Not appliable")]
     NotAppliable,
+    #[error("Unknown bus type {0:#x}")]
+    BusType(u16),
     #[error(transparent)]
     Io(#[from] Error),
 }

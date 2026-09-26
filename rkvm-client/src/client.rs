@@ -1,4 +1,3 @@
-use rkvm_input::bus::Bus;
 use rkvm_input::writer::Writer;
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
@@ -139,7 +138,7 @@ pub async fn run(
                 }
 
                 let writer = async {
-                    Writer::builder(bus_type.unwrap_or(Bus::Virtual))?
+                    Writer::builder(bus_type)?
                         .name(&name)
                         .vendor(vendor)
                         .product(product)

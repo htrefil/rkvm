@@ -4,7 +4,7 @@ use crate::glue;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum Bus {
+pub enum BusType {
     Pci,
     IsaPnp,
     Usb,
@@ -31,7 +31,7 @@ pub enum Bus {
     Sdw,
 }
 
-impl Convert for Bus {
+impl Convert for BusType {
     type Raw = u16;
 
     fn from_raw(raw: Self::Raw) -> Option<Self> {

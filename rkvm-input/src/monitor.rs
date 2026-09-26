@@ -73,6 +73,14 @@ async fn monitor(sender: Sender<Result<Interceptor, Error>>) {
             let interceptor = match Interceptor::open(&path, &registry).await {
                 Ok(interceptor) => interceptor,
                 Err(OpenError::Io(err)) => return Err(err),
+                Err(OpenError::BusType(bus_type)) => {
+                    tracing::warn!(
+                        "Ignored {:?} because of an unknown bus type {:#x}",
+                        path,
+                        bus_type
+                    );
+                    continue;
+                }
                 Err(OpenError::NotAppliable) => continue,
             };
 

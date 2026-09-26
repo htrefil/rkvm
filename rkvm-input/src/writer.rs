@@ -1,7 +1,7 @@
 use libc::c_int;
 
 use crate::abs::{AbsAxis, AbsEvent, AbsInfo};
-use crate::bus::Bus;
+use crate::bus::BusType;
 use crate::convert::Convert;
 use crate::evdev::Evdev;
 use crate::event::Event;
@@ -22,7 +22,7 @@ pub struct Writer {
 }
 
 impl Writer {
-    pub fn builder(bus_type: Bus) -> Result<WriterBuilder, Error> {
+    pub fn builder(bus_type: BusType) -> Result<WriterBuilder, Error> {
         WriterBuilder::new(bus_type)
     }
 
@@ -104,7 +104,7 @@ pub struct WriterBuilder {
 }
 
 impl WriterBuilder {
-    pub fn new(bus_type: Bus) -> Result<Self, Error> {
+    pub fn new(bus_type: BusType) -> Result<Self, Error> {
         let evdev = Evdev::new()?;
 
         let raw = match bus_type.to_raw() {

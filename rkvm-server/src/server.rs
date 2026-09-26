@@ -1,6 +1,6 @@
 use rand::rngs::SysError;
 use rkvm_input::abs::{AbsAxis, AbsInfo};
-use rkvm_input::bus::Bus;
+use rkvm_input::bus::BusType;
 use rkvm_input::event::Event;
 use rkvm_input::key::{Key, KeyEvent};
 use rkvm_input::monitor::Monitor;
@@ -290,7 +290,7 @@ pub async fn run(
 
 struct Device {
     name: CString,
-    bus_type: Option<Bus>,
+    bus_type: BusType,
     vendor: u16,
     product: u16,
     version: u16,
