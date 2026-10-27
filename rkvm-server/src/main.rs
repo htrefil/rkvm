@@ -52,10 +52,20 @@ async fn main() -> ExitCode {
         }
     };
 
-    let acceptor = match tls::configure(&config.certificate, &config.key).await {
-        Ok(acceptor) => acceptor,
-        Err(err) => {
-            tracing::error!("Error configuring TLS: {}", err);
+    let acceptor = match (&config.certificate, &config.key) {
+        (Some(certificate), Some(key)) => match tls::configure(certificate, key).await {
+            Ok(acceptor) => Some(acceptor),
+            Err(err) => {
+                tracing::error!("Error configuring TLS: {}", err);
+                return ExitCode::FAILURE;
+            }
+        },
+        (None, None) => {
+            tracing::warn!("TLS is disabled, all traffic including keystrokes is sent unencrypted");
+            None
+        }
+        _ => {
+            tracing::error!("Error configuring TLS: certificate and key must be set together");
             return ExitCode::FAILURE;
         }
     };

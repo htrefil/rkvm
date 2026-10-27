@@ -40,6 +40,7 @@ After installation:
 - Generate a certificate and private key using the `rkvm-certificate-gen` tool or provide your own from other sources.
 - For server, place both the certificate and private key in `/etc/rkvm/certificate.pem` and `/etc/rkvm/key.pem` respectively.
 - For client, place the certificate to `/etc/rkvm/certificate.pem`.
+- Alternatively, TLS can be disabled by removing `certificate` and `key` from the server config and `certificate` from all client configs. Both ends have to agree, and all traffic including every keystroke is then sent unencrypted, so only do this on a network you trust.
 - Create a config if you haven't done so already.  
   Server:  
   ```

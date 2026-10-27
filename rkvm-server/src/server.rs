@@ -18,7 +18,7 @@ use std::io::{self, ErrorKind};
 use std::net::SocketAddr;
 use std::time::Instant;
 use thiserror::Error;
-use tokio::io::{AsyncWriteExt, BufStream};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufStream};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -38,7 +38,7 @@ pub enum Error {
 
 pub async fn run(
     listen: SocketAddr,
-    acceptor: TlsAcceptor,
+    acceptor: Option<TlsAcceptor>,
     password: &str,
     switch_keys: &HashSet<Key>,
     propagate_switch_keys: bool,
@@ -316,15 +316,29 @@ enum ClientError {
 }
 
 async fn client(
-    mut init_updates: VecDeque<Update>,
-    mut receiver: Receiver<Update>,
+    init_updates: VecDeque<Update>,
+    receiver: Receiver<Update>,
     stream: TcpStream,
-    acceptor: TlsAcceptor,
+    acceptor: Option<TlsAcceptor>,
     password: &str,
 ) -> Result<(), ClientError> {
-    let stream = rkvm_net::timeout(rkvm_net::TLS_TIMEOUT, acceptor.accept(stream)).await?;
-    tracing::info!("TLS connected");
+    match acceptor {
+        Some(acceptor) => {
+            let stream = rkvm_net::timeout(rkvm_net::TLS_TIMEOUT, acceptor.accept(stream)).await?;
+            tracing::info!("TLS connected");
 
+            session(init_updates, receiver, stream, password).await
+        }
+        None => session(init_updates, receiver, stream, password).await,
+    }
+}
+
+async fn session<S: AsyncRead + AsyncWrite + Send + Unpin>(
+    mut init_updates: VecDeque<Update>,
+    mut receiver: Receiver<Update>,
+    stream: S,
+    password: &str,
+) -> Result<(), ClientError> {
     let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
     rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {

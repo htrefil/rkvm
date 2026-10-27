@@ -10,7 +10,8 @@ use tokio_rustls::rustls::pki_types::ServerName;
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub server: Server,
-    pub certificate: PathBuf,
+    // TLS is disabled if not set.
+    pub certificate: Option<PathBuf>,
     pub password: String,
     #[serde(default)]
     pub output: Output,
@@ -224,6 +225,19 @@ mod tests {
         assert_eq!(usb.manufacturer, "Logitech");
         assert_eq!(usb.product, "USB Keyboard");
         assert_eq!(usb.serial_number.as_deref(), Some("1234"));
+    }
+
+    #[test]
+    fn certificate_optional() {
+        let config = toml::from_str::<Config>(
+            r#"
+            server = "example.com:5258"
+            password = "123456789"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.certificate, None);
     }
 
     #[test]

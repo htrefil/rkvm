@@ -1,4 +1,7 @@
 server = "myserver.local:5258"
+# TLS certificate of the server. Remove to disable TLS, the server must then
+# have TLS disabled too. Without TLS, all traffic including every keystroke is
+# sent unencrypted, so only do this on a network you trust.
 certificate = "/etc/rkvm/certificate.pem"
 
 # This is to prevent malicious clients from connecting to the server.

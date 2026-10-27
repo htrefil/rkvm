@@ -57,11 +57,17 @@ async fn main() -> ExitCode {
         }
     };
 
-    let connector = match tls::configure(&config.certificate).await {
-        Ok(connector) => connector,
-        Err(err) => {
-            tracing::error!("Error configuring TLS: {}", err);
-            return ExitCode::FAILURE;
+    let connector = match &config.certificate {
+        Some(certificate) => match tls::configure(certificate).await {
+            Ok(connector) => Some(connector),
+            Err(err) => {
+                tracing::error!("Error configuring TLS: {}", err);
+                return ExitCode::FAILURE;
+            }
+        },
+        None => {
+            tracing::warn!("TLS is disabled, all traffic including keystrokes is sent unencrypted");
+            None
         }
     };
 
@@ -82,7 +88,11 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn run<T: Output>(config: &Config, connector: TlsConnector, mut output: T) -> ExitCode {
+async fn run<T: Output>(
+    config: &Config,
+    connector: Option<TlsConnector>,
+    mut output: T,
+) -> ExitCode {
     let mut terminate = match unix::signal(SignalKind::terminate()) {
         Ok(terminate) => terminate,
         Err(err) => {

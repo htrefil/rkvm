@@ -4,6 +4,9 @@ switch-keys = ["left-alt", "left-ctrl"]
 # Whether switch key presses should be propagated on the server and its clients.
 # Optional, defaults to true.
 # propagate-switch-keys = true
+# TLS certificate and private key. Remove both to disable TLS, the clients
+# must then have TLS disabled too. Without TLS, all traffic including every
+# keystroke is sent unencrypted, so only do this on a network you trust.
 certificate = "/etc/rkvm/certificate.pem"
 key = "/etc/rkvm/key.pem"
 

@@ -8,8 +8,9 @@ use std::path::PathBuf;
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub listen: SocketAddr,
-    pub certificate: PathBuf,
-    pub key: PathBuf,
+    // TLS is disabled if neither is set, setting only one of them is an error.
+    pub certificate: Option<PathBuf>,
+    pub key: Option<PathBuf>,
     pub password: String,
     pub switch_keys: HashSet<SwitchKey>,
     pub propagate_switch_keys: Option<bool>,

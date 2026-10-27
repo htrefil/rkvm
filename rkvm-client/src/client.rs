@@ -6,7 +6,7 @@ use std::io;
 use std::net::IpAddr;
 use std::time::Instant;
 use thiserror::Error;
-use tokio::io::{AsyncWriteExt, BufStream};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufStream};
 use tokio::net::TcpStream;
 use tokio::time;
 use tokio_rustls::rustls::pki_types::ServerName;
@@ -34,7 +34,7 @@ pub fn protocol_error(message: &str) -> Error {
 pub async fn run<T: Output>(
     hostname: &ServerName<'static>,
     port: u16,
-    connector: TlsConnector,
+    connector: Option<TlsConnector>,
     password: &str,
     output: &mut T,
 ) -> Result<(), Error> {
@@ -48,15 +48,28 @@ pub async fn run<T: Output>(
 
     tracing::info!("Connected to server");
 
-    let stream = rkvm_net::timeout(
-        rkvm_net::TLS_TIMEOUT,
-        connector.connect(hostname.clone(), stream),
-    )
-    .await
-    .map_err(Error::Network)?;
+    match connector {
+        Some(connector) => {
+            let stream = rkvm_net::timeout(
+                rkvm_net::TLS_TIMEOUT,
+                connector.connect(hostname.clone(), stream),
+            )
+            .await
+            .map_err(Error::Network)?;
 
-    tracing::info!("TLS connected");
+            tracing::info!("TLS connected");
 
+            session(stream, password, output).await
+        }
+        None => session(stream, password, output).await,
+    }
+}
+
+async fn session<S: AsyncRead + AsyncWrite + Send + Unpin, T: Output>(
+    stream: S,
+    password: &str,
+    output: &mut T,
+) -> Result<(), Error> {
     let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
     rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
