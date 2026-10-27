@@ -15,6 +15,12 @@ Switching between different clients is done by a configurable keyboard shortcut.
 - The uinput Linux kernel module, enabled by default in most distros. You can confirm that it's enabled in your distro by checking that `/dev/uinput` exists.
 - libevdev development files (`sudo apt install libevdev-dev` on Debian/Ubuntu)
 - Clang/LLVM (`sudo apt install clang` on Debian/Ubuntu)
+- Optionally, for the client's USB output mode: a USB device (OTG) controller, configfs mounted at `/sys/kernel/config` and the libcomposite kernel module loaded (`modprobe libcomposite`).
+
+## USB output mode
+Instead of creating virtual input devices on the client machine, the client can act as a USB keyboard and mouse for the machine its USB device port is plugged into. This lets a small board (e.g. a Raspberry Pi) control any computer, regardless of its OS, including its BIOS/UEFI. Enable it by setting `mode = "usb"` in the `[output]` table of the client config (see `example/client.toml`).
+
+Limitations: only keyboard keys, the 5 standard mouse buttons, relative motion and scroll wheels are forwarded. Absolute devices (touchpads, tablets, touchscreens) and media keys are ignored.
 
 ## Manual installation
 If you can, it is strongly recommended to use the [AUR package](https://aur.archlinux.org/packages/rkvm) to install rkvm.  

@@ -6,3 +6,25 @@ certificate = "/etc/rkvm/certificate.pem"
 #
 # Change this to your own value before deploying rkvm.
 password = "123456789"
+
+# Where received input goes. By default, virtual input devices are created on
+# this machine using uinput.
+#
+# With mode = "usb", no local devices are created at all. Instead, this machine
+# acts as a USB keyboard and mouse (using the libcomposite kernel module) for
+# whatever host its USB device port is plugged into. This requires hardware
+# with a USB device (OTG) controller, such as a Raspberry Pi.
+[output]
+mode = "uinput"
+
+# [output]
+# mode = "usb"
+# The USB device controller to use, see /sys/class/udc. Defaults to the first one found.
+# udc = "fe980000.usb"
+# How the gadget identifies itself to the host. By default, the IDs are the
+# generic Linux composite gadget ones and the strings mention rkvm.
+# vendor-id = 0x1d6b
+# product-id = 0x0104
+# manufacturer = "rkvm"
+# product = "rkvm virtual input"
+# serial-number = "0123456789"

@@ -19,6 +19,7 @@ thiserror = "2.0.20"
 tokio-rustls = "0.26.5"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+libc = "0.2.191"
 
 [package.metadata.rpm]
 package = "rkvm-client"

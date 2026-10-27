@@ -1,10 +1,7 @@
-use rkvm_input::writer::Writer;
 use rkvm_net::auth::{AuthChallenge, AuthStatus};
 use rkvm_net::message::Message;
 use rkvm_net::version::Version;
 use rkvm_net::{Pong, Update};
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::io;
 use std::net::IpAddr;
 use std::time::Instant;
@@ -14,6 +11,8 @@ use tokio::net::TcpStream;
 use tokio::time;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::TlsConnector;
+
+use crate::output::{Device, Output};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -27,11 +26,17 @@ pub enum Error {
     Auth,
 }
 
-pub async fn run(
+// The server sent something that doesn't make sense.
+pub fn protocol_error(message: &str) -> Error {
+    Error::Network(io::Error::new(io::ErrorKind::InvalidData, message))
+}
+
+pub async fn run<T: Output>(
     hostname: &ServerName<'static>,
     port: u16,
     connector: TlsConnector,
     password: &str,
+    output: &mut T,
 ) -> Result<(), Error> {
     // Intentionally don't impose any timeout for TCP connect.
     let stream = match hostname {
@@ -103,7 +108,6 @@ pub async fn run(
     let mut start = Instant::now();
 
     let mut interval = time::interval(rkvm_net::PING_INTERVAL + rkvm_net::READ_TIMEOUT);
-    let mut writers = HashMap::new();
 
     // Interval ticks immediately after creation.
     interval.tick().await;
@@ -129,33 +133,24 @@ pub async fn run(
                 delay,
                 period,
             } => {
-                let entry = writers.entry(id);
-                if let Entry::Occupied(_) = entry {
-                    return Err(Error::Network(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Server created the same device twice",
-                    )));
-                }
-
-                let writer = async {
-                    Writer::builder(bus_type)?
-                        .name(&name)
-                        .vendor(vendor)
-                        .product(product)
-                        .version(version)
-                        .rel(rel)?
-                        .abs(abs)?
-                        .key(keys)?
-                        .property(properties)?
-                        .delay(delay)?
-                        .period(period)?
-                        .build()
-                        .await
-                }
-                .await
-                .map_err(Error::Input)?;
-
-                entry.or_insert(writer);
+                output
+                    .create_device(
+                        id,
+                        Device {
+                            name: name.clone(),
+                            bus_type,
+                            vendor,
+                            product,
+                            version,
+                            rel,
+                            abs,
+                            keys,
+                            properties,
+                            delay,
+                            period,
+                        },
+                    )
+                    .await?;
 
                 tracing::info!(
                     %id,
@@ -167,24 +162,12 @@ pub async fn run(
                 );
             }
             Update::DestroyDevice { id } => {
-                if writers.remove(&id).is_none() {
-                    return Err(Error::Network(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Server destroyed a nonexistent device",
-                    )));
-                }
+                output.destroy_device(id).await?;
 
                 tracing::info!(%id, "Destroyed device");
             }
             Update::Event { id, event } => {
-                let writer = writers.get_mut(&id).ok_or_else(|| {
-                    Error::Network(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Server sent an event to a nonexistent device",
-                    ))
-                })?;
-
-                writer.write(&event).await.map_err(Error::Input)?;
+                output.write(id, &event).await?;
 
                 tracing::trace!(%id, "Wrote an event to device");
             }

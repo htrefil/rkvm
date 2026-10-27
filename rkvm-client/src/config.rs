@@ -12,6 +12,49 @@ pub struct Config {
     pub server: Server,
     pub certificate: PathBuf,
     pub password: String,
+    #[serde(default)]
+    pub output: Output,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(tag = "mode", rename_all = "kebab-case")]
+pub enum Output {
+    #[default]
+    Uinput,
+    Usb(Usb),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Usb {
+    pub udc: Option<String>,
+    #[serde(default = "default_vendor_id")]
+    pub vendor_id: u16,
+    #[serde(default = "default_product_id")]
+    pub product_id: u16,
+    #[serde(default = "default_manufacturer")]
+    pub manufacturer: String,
+    #[serde(default = "default_product")]
+    pub product: String,
+    pub serial_number: Option<String>,
+}
+
+// Linux Foundation.
+fn default_vendor_id() -> u16 {
+    0x1d6b
+}
+
+// Multifunction Composite Gadget.
+fn default_product_id() -> u16 {
+    0x0104
+}
+
+fn default_manufacturer() -> String {
+    "rkvm".to_owned()
+}
+
+fn default_product() -> String {
+    "rkvm virtual input".to_owned()
 }
 
 pub struct Server {
@@ -71,6 +114,12 @@ mod tests {
         server: Server,
     }
 
+    #[derive(Deserialize)]
+    struct OutputData {
+        #[serde(default)]
+        output: Output,
+    }
+
     #[test]
     fn server_dns() {
         let parsed = toml::from_str::<Data>(r#"server = "example.com:8523""#)
@@ -118,6 +167,63 @@ mod tests {
         };
 
         assert_eq!(parsed_ip, Ipv6Addr::from_str("::1").unwrap());
+    }
+
+    #[test]
+    fn output_default() {
+        let parsed = toml::from_str::<OutputData>("").unwrap();
+        assert!(matches!(parsed.output, Output::Uinput));
+    }
+
+    #[test]
+    fn output_usb() {
+        let parsed = toml::from_str::<OutputData>(
+            r#"
+            [output]
+            mode = "usb"
+            udc = "fe980000.usb"
+            "#,
+        )
+        .unwrap();
+
+        let usb = match parsed.output {
+            Output::Usb(usb) => usb,
+            _ => unreachable!(),
+        };
+
+        assert_eq!(usb.udc.as_deref(), Some("fe980000.usb"));
+        assert_eq!(usb.vendor_id, default_vendor_id());
+        assert_eq!(usb.product_id, default_product_id());
+        assert_eq!(usb.manufacturer, default_manufacturer());
+        assert_eq!(usb.product, default_product());
+        assert_eq!(usb.serial_number, None);
+    }
+
+    #[test]
+    fn output_usb_identity() {
+        let parsed = toml::from_str::<OutputData>(
+            r#"
+            [output]
+            mode = "usb"
+            vendor-id = 0x046d
+            product-id = 0xc31c
+            manufacturer = "Logitech"
+            product = "USB Keyboard"
+            serial-number = "1234"
+            "#,
+        )
+        .unwrap();
+
+        let usb = match parsed.output {
+            Output::Usb(usb) => usb,
+            _ => unreachable!(),
+        };
+
+        assert_eq!(usb.vendor_id, 0x046d);
+        assert_eq!(usb.product_id, 0xc31c);
+        assert_eq!(usb.manufacturer, "Logitech");
+        assert_eq!(usb.product, "USB Keyboard");
+        assert_eq!(usb.serial_number.as_deref(), Some("1234"));
     }
 
     #[test]
