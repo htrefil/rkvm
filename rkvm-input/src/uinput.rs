@@ -29,6 +29,13 @@ impl Uinput {
 
         let mut uinput = MaybeUninit::uninit();
 
+        // The clone cannot service force feedback requests (UI_FF_UPLOAD / UI_FF_ERASE), so
+        // don't advertise EV_FF: a client that uploads an effect would otherwise block for 30 s
+        // per request in the kernel (drivers/input/misc/uinput.c), holding evdev's mutex.
+        unsafe {
+            glue::libevdev_disable_event_type(evdev.as_ptr(), glue::EV_FF);
+        }
+
         let ret = unsafe {
             glue::libevdev_uinput_create_from_device(
                 evdev.as_ptr(),
