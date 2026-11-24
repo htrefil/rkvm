@@ -108,7 +108,6 @@ async fn run<T: Output>(
                 return ExitCode::FAILURE;
             }
         }
-        // This is needed to properly clean up libevdev and USB gadget stuff.
         _ = terminate.recv() => {
             tracing::info!("Exiting on signal");
         }

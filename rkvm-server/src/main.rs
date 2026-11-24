@@ -8,6 +8,7 @@ use std::future;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
+use tokio::signal::unix::{self, SignalKind};
 use tokio::{fs, signal, time};
 use tracing::subscriber;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
@@ -70,6 +71,14 @@ async fn main() -> ExitCode {
         }
     };
 
+    let mut terminate = match unix::signal(SignalKind::terminate()) {
+        Ok(terminate) => terminate,
+        Err(err) => {
+            tracing::error!("Error setting up signal handler: {}", err);
+            return ExitCode::FAILURE;
+        }
+    };
+
     let shutdown = async {
         match args.shutdown_after {
             Some(shutdown_after) => time::sleep(Duration::from_secs(shutdown_after)).await,
@@ -87,7 +96,9 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        // This is needed to properly clean libevdev stuff up.
+        _ = terminate.recv() => {
+            tracing::info!("Exiting on signal");
+        }
         result = signal::ctrl_c() => {
             if let Err(err) = result {
                 tracing::error!("Error setting up signal handler: {}", err);
