@@ -1,0 +1,34 @@
+[package]
+name = "rkvm-deb"
+description = "Keyboard and mouse sharing across Linux machines"
+license = "MIT"
+version = "0.7.0"
+authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
+edition = "2021"
+publish = false
+
+# This crate contains no code. It only exists to build the "rkvm" Debian
+# package, which bundles the server, client and certificate generator.
+
+[package.metadata.deb]
+name = "rkvm"
+maintainer = "Jan Trefil <8711792+htrefil@users.noreply.github.com>"
+section = "utils"
+depends = "$auto, libevdev2"
+extended-description = """\
+rkvm is a tool for sharing keyboard and mouse across multiple Linux machines. \
+It is based on a client/server architecture, where the server is the machine \
+controlling mouse and keyboard and relays events to clients."""
+# cargo-deb builds the target/release binaries listed here, so changes to them trigger a rebuild.
+assets = [
+    ["target/release/rkvm-server", "usr/bin/", "755"],
+    ["target/release/rkvm-client", "usr/bin/", "755"],
+    ["target/release/rkvm-certificate-gen", "usr/bin/", "755"],
+    ["../example/server.toml", "usr/share/rkvm/examples/", "644"],
+    ["../example/client.toml", "usr/share/rkvm/examples/", "644"],
+    ["../README.md", "usr/share/doc/rkvm/README.md", "644"],
+]
+systemd-units = [
+    { unit-scripts = "../systemd", unit-name = "rkvm-server", enable = false, start = false },
+    { unit-scripts = "../systemd", unit-name = "rkvm-client", enable = false, start = false },
+]

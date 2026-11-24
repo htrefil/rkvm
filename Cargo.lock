@@ -890,6 +890,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rkvm-deb"
+version = "0.7.0"
+
+[[package]]
 name = "rkvm-input"
 version = "0.1.0"
 dependencies = [

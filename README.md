@@ -35,6 +35,16 @@ $ cargo build --release
 # cp systemd/rkvm-server.service /usr/lib/systemd/system/
 ```
 
+## Debian/Ubuntu packages
+Debian packages can be built with [cargo-deb](https://github.com/kornelski/cargo-deb):
+```
+$ cargo install cargo-deb
+$ cargo deb -p rkvm-deb
+# apt install ./target/debian/rkvm_*.deb
+```
+This produces a single `rkvm` package containing the server, client and certificate generator.
+The services are not enabled or started on install. Configure them first (see below).
+
 ## Configuration
 After installation:
 - Generate a certificate and private key using the `rkvm-certificate-gen` tool or provide your own from other sources.
