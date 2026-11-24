@@ -103,10 +103,10 @@ async fn run<T: Output>(
 
     tokio::select! {
         result = client::run(&config.server.hostname, config.server.port, connector, &config.password, &mut output) => {
-            if let Err(err) = result {
-                tracing::error!("Error: {}", err);
-                return ExitCode::FAILURE;
-            }
+            let Err(err) = result;
+            tracing::error!("Error: {}", err);
+
+            return ExitCode::FAILURE;
         }
         _ = terminate.recv() => {
             tracing::info!("Exiting on signal");

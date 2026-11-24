@@ -42,7 +42,7 @@ pub async fn run(
     password: &str,
     switch_keys: &HashSet<Key>,
     propagate_switch_keys: bool,
-) -> Result<(), Error> {
+) -> Result<!, Error> {
     let listener = TcpListener::bind(&listen).await.map_err(Error::Network)?;
     tracing::info!("Listening on {}", listen);
 

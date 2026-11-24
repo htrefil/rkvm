@@ -91,10 +91,10 @@ async fn main() -> ExitCode {
 
     tokio::select! {
         result = server::run(config.listen, acceptor, &config.password, &switch_keys, propagate_switch_keys) => {
-            if let Err(err) = result {
-                tracing::error!("Error: {}", err);
-                return ExitCode::FAILURE;
-            }
+            let Err(err) = result;
+            tracing::error!("Error: {}", err);
+
+            return ExitCode::FAILURE;
         }
         _ = terminate.recv() => {
             tracing::info!("Exiting on signal");

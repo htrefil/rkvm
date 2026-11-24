@@ -37,7 +37,7 @@ pub async fn run<T: Output>(
     connector: Option<TlsConnector>,
     password: &str,
     output: &mut T,
-) -> Result<(), Error> {
+) -> Result<!, Error> {
     // Intentionally don't impose any timeout for TCP connect.
     let stream = match hostname {
         ServerName::DnsName(name) => TcpStream::connect(&(name.as_ref(), port)).await,
@@ -69,7 +69,7 @@ async fn session<S: AsyncRead + AsyncWrite + Send + Unpin, T: Output>(
     stream: S,
     password: &str,
     output: &mut T,
-) -> Result<(), Error> {
+) -> Result<!, Error> {
     let mut stream = BufStream::with_capacity(1024, 1024, stream);
 
     rkvm_net::timeout(rkvm_net::WRITE_TIMEOUT, async {
