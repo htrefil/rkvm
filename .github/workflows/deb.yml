@@ -1,0 +1,90 @@
+name: Debian packages
+
+on:
+  push:
+    tags: ["*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  build:
+    name: ${{ matrix.distro.name }} ${{ matrix.arch.name }}
+    runs-on: ${{ matrix.arch.runner }}
+    # Build inside the target distribution, so the binaries link against its glibc and are
+    # generated from its kernel headers, and cargo-deb derives the right dependency versions.
+    container: ${{ matrix.distro.image }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - { name: debian12, image: "debian:bookworm" }
+          - { name: debian13, image: "debian:trixie" }
+          - { name: ubuntu22.04, image: "ubuntu:22.04" }
+          - { name: ubuntu24.04, image: "ubuntu:24.04" }
+          - { name: ubuntu26.04, image: "ubuntu:26.04" }
+        arch:
+          - { name: amd64, runner: ubuntu-latest }
+          - { name: arm64, runner: ubuntu-24.04-arm }
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential pkg-config dpkg-dev libclang-dev libevdev-dev
+
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb
+
+      - name: Build package
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' rkvm-deb/Cargo.toml)
+          mkdir -p dist
+          cargo deb -p rkvm-deb \
+            --deb-revision "1~${{ matrix.distro.name }}" \
+            -o "dist/rkvm_${version}_${{ matrix.distro.name }}_${{ matrix.arch.name }}.deb"
+
+      - name: Test install
+        run: |
+          apt-get install -y ./dist/*.deb
+          rkvm-server --help
+          rkvm-client --help
+          rkvm-certificate-gen --help
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rkvm-${{ matrix.distro.name }}-${{ matrix.arch.name }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+  release:
+    name: Attach to release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --verify-tag
+          gh release upload "$TAG" dist/*.deb --clobber

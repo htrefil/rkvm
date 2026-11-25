@@ -58,6 +58,7 @@ impl Convert for BusType {
             glue::BUS_RMI => Self::Rmi,
             glue::BUS_CEC => Self::Cec,
             glue::BUS_INTEL_ISHTP => Self::IntelIshtp,
+            #[cfg(have_bus_amd_sfh)]
             glue::BUS_AMD_SFH => Self::AmdSfh,
             #[cfg(have_bus_sdw)]
             glue::BUS_SDW => Self::Sdw,
@@ -91,7 +92,10 @@ impl Convert for BusType {
             Self::Rmi => glue::BUS_RMI,
             Self::Cec => glue::BUS_CEC,
             Self::IntelIshtp => glue::BUS_INTEL_ISHTP,
+            #[cfg(have_bus_amd_sfh)]
             Self::AmdSfh => glue::BUS_AMD_SFH,
+            #[cfg(not(have_bus_amd_sfh))]
+            Self::AmdSfh => return None,
             #[cfg(have_bus_sdw)]
             Self::Sdw => glue::BUS_SDW,
             #[cfg(not(have_bus_sdw))]

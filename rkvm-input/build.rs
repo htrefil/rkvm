@@ -5,14 +5,12 @@ use std::env;
 use std::path::PathBuf;
 
 const CHECKS: &[(&str, &str)] = &[
-    // Added in v6.1-rc1.
     ("RKVM_HAVE_ABS_PROFILE", "have_abs_profile"),
-    // Only present in newer kernels.
     (
         "RKVM_HAVE_INPUT_PROP_PRESSUREPAD",
         "have_input_prop_pressurepad",
     ),
-    // Added in v6.17-rc1.
+    ("RKVM_HAVE_BUS_AMD_SFH", "have_bus_amd_sfh"),
     ("RKVM_HAVE_BUS_SDW", "have_bus_sdw"),
 ];
 
