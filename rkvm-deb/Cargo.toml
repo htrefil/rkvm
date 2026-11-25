@@ -2,7 +2,7 @@
 name = "rkvm-deb"
 description = "Keyboard and mouse sharing across Linux machines"
 license = "MIT"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Jan Trefil <8711792+htrefil@users.noreply.github.com>"]
 edition = "2021"
 publish = false
@@ -24,6 +24,10 @@ assets = [
     ["target/release/rkvm-server", "usr/bin/", "755"],
     ["target/release/rkvm-client", "usr/bin/", "755"],
     ["target/release/rkvm-certificate-gen", "usr/bin/", "755"],
+    # Files under etc/ are marked as conffiles, so dpkg keeps local edits on upgrades.
+    # Only readable by root, since they contain the password.
+    ["../example/server.toml", "etc/rkvm/", "600"],
+    ["../example/client.toml", "etc/rkvm/", "600"],
     ["../example/server.toml", "usr/share/rkvm/examples/", "644"],
     ["../example/client.toml", "usr/share/rkvm/examples/", "644"],
     ["../README.md", "usr/share/doc/rkvm/README.md", "644"],
