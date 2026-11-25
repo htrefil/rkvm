@@ -41,9 +41,8 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deb
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
 
       - name: Build package
         run: |
