@@ -1,8 +1,8 @@
 name: Debian packages
 
 on:
+  # TODO: Temporarily runs on every push for testing; restrict to tags (tags: ["*"]) afterwards.
   push:
-    tags: ["*"]
   workflow_dispatch:
 
 env:
