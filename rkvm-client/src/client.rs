@@ -87,8 +87,8 @@ async fn session<S: AsyncRead + AsyncWrite + Send + Unpin, T: Output>(
 
     if version != Version::CURRENT {
         return Err(Error::Version {
-            server: Version::CURRENT,
-            client: version,
+            server: version,
+            client: Version::CURRENT,
         });
     }
 
